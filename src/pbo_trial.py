@@ -11,12 +11,9 @@ from botorch.acquisition import qNoisyExpectedImprovement
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from torch import Tensor
 
-from src.acquisition_functions.emov import (
-    ExpectedMaxObjectiveValue,
-    qExpectedMaxObjectiveValue,
-)
+from src.acquisition_functions.expected_utility import qExpectedUtility
 from src.acquisition_functions.thompson_sampling import gen_thompson_sampling_query
-
+from src.utility import MaxObjectiveValue, Probit
 from src.utils import (
     fit_model,
     generate_initial_data,
@@ -32,6 +29,8 @@ def pbo_trial(
     problem: str,
     obj_func: Callable,
     input_dim: int,
+    comp_noise_type: str,
+    comp_noise: float,
     algo: str,
     algo_params: Optional[Dict],
     batch_size: int,
@@ -94,8 +93,8 @@ def pbo_trial(
                 batch_size=batch_size,
                 input_dim=input_dim,
                 obj_func=obj_func,
-                comp_noise_type="noiseless",
-                comp_noise=0.01,
+                comp_noise_type=comp_noise_type,
+                comp_noise=comp_noise,
                 seed=trial,
             )
 
@@ -114,8 +113,8 @@ def pbo_trial(
             batch_size=batch_size,
             input_dim=input_dim,
             obj_func=obj_func,
-            comp_noise_type="noiseless",
-            comp_noise=0.01,
+            comp_noise_type=comp_noise_type,
+            comp_noise=comp_noise,
             seed=trial,
         )
 
@@ -207,11 +206,21 @@ def get_new_suggested_query(
             num_queries=1, batch_size=batch_size, input_dim=input_dim
         )
     elif algo == "EMOV":
-        # Model
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
         model = fit_model(datapoints, comparisons)
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        acquisition_function = qExpectedMaxObjectiveValue(model=model, sampler=sampler)
+        utility = MaxObjectiveValue()
+        acquisition_function = qExpectedUtility(
+            model=model, utility=utility, sampler=sampler
+        )
+    elif algo == "EPOV":
+        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+        model = fit_model(datapoints, comparisons)
+        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
+        utility = Probit(num_samples=64, batch_size=batch_size, noise_level=1.0)
+        acquisition_function = qExpectedUtility(
+            model=model, utility=utility, sampler=sampler
+        )
     elif algo == "NEI":
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
         model = fit_model(datapoints, comparisons)
