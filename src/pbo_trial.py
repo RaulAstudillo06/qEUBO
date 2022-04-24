@@ -7,7 +7,8 @@ import os
 import sys
 import time
 import torch
-from botorch.acquisition import qNoisyExpectedImprovement
+from botorch.acquisition import PosteriorMean, qNoisyExpectedImprovement
+from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from torch import Tensor
 
@@ -69,25 +70,35 @@ def pbo_trial(
                     results_folder + "responses/responses_" + str(trial) + ".txt"
                 )
             )
-            # Historical best latent objective values and running times
-            best_latent_obj_vals = list(
+            # Historical max objective within queries
+            max_obj_vals_within_queries = list(
                 np.loadtxt(
-                    results_folder + "best_latent_obj_vals_" + str(trial) + ".txt"
+                    results_folder
+                    + "max_obj_vals_within_queries_"
+                    + str(trial)
+                    + ".txt"
                 )
             )
+            # Historical objective values at the maximum of the posterior mean
+            obj_vals_at_max_post_mean = list(
+                np.loadtxt(
+                    results_folder + "obj_vals_at_max_post_mean_" + str(trial) + ".txt"
+                )
+            )
+            # Historical acquisition runtimes
             runtimes = list(
                 np.loadtxt(results_folder + "runtimes/runtimes_" + str(trial) + ".txt")
             )
 
-            # Current best latent objective value and cumulative cost
-            best_latent_obj_val = torch.tensor(best_latent_obj_vals[-1])
+            # Current max objective value within queries
+            max_obj_val_within_queries = torch.tensor(max_obj_vals_within_queries[-1])
 
-            iteration = len(best_latent_obj_vals) - 1
+            iteration = len(max_obj_vals_within_queries) - 1
             print("Restarting experiment from available data.")
 
         except:
 
-            # Initial evaluations
+            # Initial data
             queries, obj_vals, responses = generate_initial_data(
                 num_queries=num_init_queries,
                 batch_size=batch_size,
@@ -98,16 +109,22 @@ def pbo_trial(
                 seed=trial,
             )
 
-            # Current best latent objective value
-            best_latent_obj_val = obj_vals.max().item()
+            # Historical max objective values within queries and runtimes
+            max_obj_val_within_queries = obj_vals.max().item()
+            max_obj_vals_within_queries = [max_obj_val_within_queries]
 
-            # Historical best latent objective values and running times
-            best_latent_obj_vals = [best_latent_obj_val]
+            # Historical objective values at the maximum of the posterior mean
+            obj_val_at_max_post_mean = compute_obj_val_at_max_post_mean(
+                obj_func, model, input_dim
+            )
+            obj_vals_at_max_post_mean = [obj_val_at_max_post_mean]
+
+            # Historical acquisition runtimes
             runtimes = []
 
             iteration = 0
     else:
-        # Initial evaluations
+        # Initial data
         queries, obj_vals, responses = generate_initial_data(
             num_queries=num_init_queries,
             batch_size=batch_size,
@@ -118,11 +135,24 @@ def pbo_trial(
             seed=trial,
         )
 
-        # Current best latent objective value and cumulative cost
-        best_latent_obj_val = obj_vals.max().item()
+        # Fit GP model
+        t0 = time.time()
+        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+        model = fit_model(datapoints, comparisons)
+        t1 = time.time()
+        model_training_time = t1 - t0
 
-        # Historical best latent objective values and runtimes
-        best_latent_obj_vals = [best_latent_obj_val]
+        # Historical objective values at the maximum of the posterior mean
+        obj_val_at_max_post_mean = compute_obj_val_at_max_post_mean(
+            obj_func, model, input_dim
+        )
+        obj_vals_at_max_post_mean = [obj_val_at_max_post_mean]
+
+        # Historical max objective values within queries and runtimes
+        max_obj_val_within_queries = obj_vals.max().item()
+        max_obj_vals_within_queries = [max_obj_val_within_queries]
+
+        # Historical acquisition runtimes
         runtimes = []
 
         iteration = 0
@@ -138,15 +168,14 @@ def pbo_trial(
         t0 = time.time()
         new_query = get_new_suggested_query(
             algo=algo,
-            queries=queries,
-            responses=responses,
+            model=model,
             batch_size=batch_size,
             input_dim=input_dim,
             algo_params=algo_params,
         )
-
         t1 = time.time()
-        runtimes.append(t1 - t0)
+        acquisition_time = t1 - t0
+        runtimes.append(acquisition_time + model_training_time)
 
         # Get response at new query
         new_obj_vals = get_obj_vals(new_query, obj_func)
@@ -159,10 +188,27 @@ def pbo_trial(
         obj_vals = torch.cat([obj_vals, new_obj_vals], 0)
         responses = torch.cat((responses, new_response))
 
-        # Update historical best latent objective values and cumulative cost
-        best_latent_obj_val = obj_vals.max().item()
-        best_latent_obj_vals.append(best_latent_obj_val)
-        print("Best value found so far: " + str(best_latent_obj_val))
+        # Fit GP model
+        t0 = time.time()
+        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+        model = fit_model(datapoints, comparisons)
+        t1 = time.time()
+        model_training_time = t1 - t0
+
+        # Append current objective value at the maximum of the posterior mean
+        obj_val_at_max_post_mean = compute_obj_val_at_max_post_mean(
+            obj_func, model, input_dim
+        )
+        obj_vals_at_max_post_mean.append(obj_val_at_max_post_mean)
+        print(
+            "Objective value at the maximum of the posterior mean: "
+            + str(obj_val_at_max_post_mean)
+        )
+
+        # Append current max objective val within queries
+        max_obj_val_within_queries = obj_vals.max().item()
+        max_obj_vals_within_queries.append(max_obj_val_within_queries)
+        print("Max objecive value within queries: " + str(max_obj_val_within_queries))
 
         # Save data
         if not os.path.exists(results_folder):
@@ -187,15 +233,18 @@ def pbo_trial(
             np.atleast_1d(runtimes),
         )
         np.savetxt(
-            results_folder + "best_latent_obj_vals_" + str(trial) + ".txt",
-            np.atleast_1d(best_latent_obj_vals),
+            results_folder + "obj_vals_at_max_post_mean_" + str(trial) + ".txt",
+            np.atleast_1d(obj_vals_at_max_post_mean),
+        )
+        np.savetxt(
+            results_folder + "max_obj_vals_within_queries_" + str(trial) + ".txt",
+            np.atleast_1d(max_obj_vals_within_queries),
         )
 
 
 def get_new_suggested_query(
     algo: str,
-    queries: Tensor,
-    responses: Tensor,
+    model: Model,
     batch_size,
     input_dim: int,
     algo_params: Optional[Dict] = None,
@@ -206,31 +255,23 @@ def get_new_suggested_query(
             num_queries=1, batch_size=batch_size, input_dim=input_dim
         )
     elif algo == "EMOV":
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons)
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
         utility = MaxObjectiveValue()
         acquisition_function = qExpectedUtility(
             model=model, utility=utility, sampler=sampler
         )
     elif algo == "EPOV":
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons)
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        utility = Probit(num_samples=64, batch_size=batch_size, noise_level=1.0)
+        utility = Probit()
         acquisition_function = qExpectedUtility(
             model=model, utility=utility, sampler=sampler
         )
     elif algo == "NEI":
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons)
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
         acquisition_function = qNoisyExpectedImprovement(
-            model=model, X_baseline=datapoints, sampler=sampler
+            model=model, X_baseline=model.datapoints.clone(), sampler=sampler
         )
     elif algo == "TS":
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons)
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
         return gen_thompson_sampling_query(model, batch_size, standard_bounds)
 
@@ -240,9 +281,27 @@ def get_new_suggested_query(
         acq_func=acquisition_function,
         bounds=standard_bounds,
         batch_size=batch_size,
-        algo_params=algo_params,
     )
 
     new_query = new_query.unsqueeze(0)
 
     return new_query
+
+
+def compute_obj_val_at_max_post_mean(
+    obj_func: Callable,
+    model: Model,
+    input_dim: int,
+) -> Tensor:
+
+    standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
+
+    post_mean_func = PosteriorMean(model=model)
+    max_post_mean_func = optimize_acqf_and_get_suggested_query(
+        acq_func=post_mean_func,
+        bounds=standard_bounds,
+        batch_size=1,
+    )
+
+    obj_val_at_max_post_mean_func = obj_func(max_post_mean_func).item()
+    return obj_val_at_max_post_mean_func

@@ -110,7 +110,6 @@ def optimize_acqf_and_get_suggested_query(
     acq_func: AcquisitionFunction,
     bounds: Tensor,
     batch_size: int,
-    algo_params: Dict,
 ) -> Tensor:
     """Optimizes the acquisition function, and returns the candidate solution."""
     input_dim = bounds.shape[1]
