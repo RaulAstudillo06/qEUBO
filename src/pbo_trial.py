@@ -90,8 +90,12 @@ def pbo_trial(
                 np.loadtxt(results_folder + "runtimes/runtimes_" + str(trial) + ".txt")
             )
 
-            # Current max objective value within queries
-            max_obj_val_within_queries = torch.tensor(max_obj_vals_within_queries[-1])
+            # Fit GP model
+            t0 = time.time()
+            datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+            model = fit_model(datapoints, comparisons)
+            t1 = time.time()
+            model_training_time = t1 - t0
 
             iteration = len(max_obj_vals_within_queries) - 1
             print("Restarting experiment from available data.")
