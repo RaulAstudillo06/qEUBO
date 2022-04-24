@@ -98,26 +98,22 @@ def pbo_trial(
 
         except:
 
-            # Initial data
-            queries, obj_vals, responses = generate_initial_data(
-                num_queries=num_init_queries,
-                batch_size=batch_size,
-                input_dim=input_dim,
-                obj_func=obj_func,
-                comp_noise_type=comp_noise_type,
-                comp_noise=comp_noise,
-                seed=trial,
-            )
-
-            # Historical max objective values within queries and runtimes
-            max_obj_val_within_queries = obj_vals.max().item()
-            max_obj_vals_within_queries = [max_obj_val_within_queries]
+            # Fit GP model
+            t0 = time.time()
+            datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+            model = fit_model(datapoints, comparisons)
+            t1 = time.time()
+            model_training_time = t1 - t0
 
             # Historical objective values at the maximum of the posterior mean
             obj_val_at_max_post_mean = compute_obj_val_at_max_post_mean(
                 obj_func, model, input_dim
             )
             obj_vals_at_max_post_mean = [obj_val_at_max_post_mean]
+
+            # Historical max objective values within queries and runtimes
+            max_obj_val_within_queries = obj_vals.max().item()
+            max_obj_vals_within_queries = [max_obj_val_within_queries]
 
             # Historical acquisition runtimes
             runtimes = []
