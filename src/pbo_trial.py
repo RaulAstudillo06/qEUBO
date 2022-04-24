@@ -101,6 +101,16 @@ def pbo_trial(
             print("Restarting experiment from available data.")
 
         except:
+            # Initial data
+            queries, obj_vals, responses = generate_initial_data(
+                num_queries=num_init_queries,
+                batch_size=batch_size,
+                input_dim=input_dim,
+                obj_func=obj_func,
+                comp_noise_type=comp_noise_type,
+                comp_noise=comp_noise,
+                seed=trial,
+            )
 
             # Fit GP model
             t0 = time.time()
