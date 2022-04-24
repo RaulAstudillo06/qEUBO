@@ -43,35 +43,23 @@ class MaxObjectiveValue(Utility):
 class Probit(Utility):
     r"""."""
 
-    def __init__(
-        self,
-        num_samples: int,
-        batch_size: int,
-        noise_level: Union[float, Tensor],
-    ) -> None:
+    def __init__(self) -> None:
         r"""Constructor for the Probit utility function class.
         Args:
             num_samples: .
         """
         super().__init__()
-        self.num_samples = num_samples
-        self.num_samples = batch_size
-        noise_samples = draw_sobol_normal_samples(
-            d=batch_size,
-            n=num_samples,
-        )
-        noise_samples = torch.as_tensor(noise_level) * noise_samples
-        noise_samples = noise_samples.unsqueeze(1)
-        noise_samples = noise_samples.unsqueeze(1)
-        self.register_buffer("noise_samples", noise_samples)
+        self.std_norm = torch.distributions.normal.Normal(torch.zeros(1), torch.ones(1))
+        self.register_buffer("sqrt2", torch.sqrt(torch.tensor(2.0)))
 
     def forward(self, Y: Tensor) -> Tensor:
         r"""Evaluate the utility function on the candidate set Y.
         Args:
-            Y: A `(b) x q`-dim Tensor of `(b)` t-batches with `q` objective values each.
+            Y: A `(b) x 2`-dim Tensor of `(b)` t-batches with `2` objective values each.
         Returns:
             A `(b)`-dim Tensor of utility function values at the given outcome values `Y`.
         """
-        corrupted_Y_samples = Y.unsqueeze(0) + self.noise_samples
-        corrupted_max_Y_samples = corrupted_Y_samples.max(dim=-1).values
-        return corrupted_max_Y_samples.mean(0)
+        prob0 = self.std_norm.cdf((Y[..., 0] - Y[..., 1]) / self.sqrt2)
+        prob1 = 1.0 - prob0
+        utility = (prob0 * Y[..., 0]) + (prob1 * Y[..., 1])
+        return utility
