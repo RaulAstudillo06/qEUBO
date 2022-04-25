@@ -3,6 +3,7 @@ import os
 import sys
 
 problem = "levy"
+show_incomplete_trials = False
 
 if problem == "levy":
     n_iter = 50
@@ -24,7 +25,7 @@ for a, algo in enumerate(algos):
         try:
             runtimes = np.loadtxt(algo_results_dir + "runtimes_" + str(trial) + ".txt")
             n_completed_iter = len(runtimes)
-            if n_completed_iter < n_iter:
+            if n_completed_iter < n_iter and show_incomplete_trials:
                 print("Trial {} is not complete yet.".format(trial))
                 print("Number of completed iterations is: {}".format(n_completed_iter))
         except:
