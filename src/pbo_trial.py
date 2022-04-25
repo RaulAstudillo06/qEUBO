@@ -55,11 +55,11 @@ def pbo_trial(
         # Check if training data is already available
         try:
             # Current available evaluations
-            queries_reshaped = np.loadtxt(
+            queries = np.loadtxt(
                 results_folder + "queries/queries_" + str(trial) + ".txt"
             )
             queries = queries.reshape(
-                queries_reshaped[0], batch_size, queries_reshaped[1] / batch_size
+                queries.shape[0], batch_size, int(queries.shape[1] / batch_size)
             )
             queries = torch.tensor(queries)
             obj_vals = torch.tensor(
@@ -87,7 +87,11 @@ def pbo_trial(
             )
             # Historical acquisition runtimes
             runtimes = list(
-                np.loadtxt(results_folder + "runtimes/runtimes_" + str(trial) + ".txt")
+                np.atleast_1d(
+                    np.loadtxt(
+                        results_folder + "runtimes/runtimes_" + str(trial) + ".txt"
+                    )
+                )
             )
 
             # Fit GP model
@@ -225,6 +229,8 @@ def pbo_trial(
             os.makedirs(results_folder)
         if not os.path.exists(results_folder + "queries/"):
             os.makedirs(results_folder + "queries/")
+        if not os.path.exists(results_folder + "obj_vals/"):
+            os.makedirs(results_folder + "obj_vals/")
         if not os.path.exists(results_folder + "responses/"):
             os.makedirs(results_folder + "responses/")
         if not os.path.exists(results_folder + "runtimes/"):
@@ -233,6 +239,10 @@ def pbo_trial(
         queries_reshaped = queries.numpy().reshape(responses.shape[0], -1)
         np.savetxt(
             results_folder + "queries/queries_" + str(trial) + ".txt", queries_reshaped
+        )
+        np.savetxt(
+            results_folder + "obj_vals/obj_vals_" + str(trial) + ".txt",
+            obj_vals.numpy(),
         )
         np.savetxt(
             results_folder + "responses/responses_" + str(trial) + ".txt",
