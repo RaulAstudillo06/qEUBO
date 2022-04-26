@@ -194,7 +194,7 @@ def pbo_trial(
         # Get response at new query
         new_obj_vals = get_obj_vals(new_query, obj_func)
         new_response = generate_responses(
-            new_obj_vals, noise_type="noiseless", noise_level=0.01
+            new_obj_vals, noise_type=comp_noise_type, noise_level=comp_noise
         )
 
         # Update training data

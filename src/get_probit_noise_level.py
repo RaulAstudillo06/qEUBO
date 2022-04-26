@@ -1,4 +1,4 @@
-from distutils.log import error
+import math
 import torch
 
 from scipy.optimize import minimize
@@ -27,7 +27,8 @@ def get_probit_noise_level(
 
     error_rate = estimate_error_rate(probit_noise, target_Y, true_comps)
     print(error_rate)
-    return probit_noise
+    lambd = probit_noise / math.sqrt(2)
+    return lambd
 
 
 def estimate_error_rate(x, obj_vals, true_comps):

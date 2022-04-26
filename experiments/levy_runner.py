@@ -47,7 +47,7 @@ if False:
     )
     print(probit_noise_level)
 
-probit_noise_level = 0.31
+probit_noise_level = 0.21
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -69,5 +69,5 @@ experiment_manager(
     num_max_iter=50,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )
