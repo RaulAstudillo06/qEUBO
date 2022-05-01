@@ -16,7 +16,7 @@ print(script_dir[:-12])
 sys.path.append(script_dir[:-12])
 
 from src.experiment_manager import experiment_manager
-from src.get_probit_noise_level import get_probit_noise_level
+from src.get_noise_level import get_noise_level
 
 
 # Objective function
@@ -36,17 +36,23 @@ input_dim = 6
 algo = "EPOV"
 
 # estimate noise level
+comp_noise_type = "probit"
+
 if False:
-    probit_noise_level = get_probit_noise_level(
+    noise_level = get_noise_level(
         obj_func,
         input_dim,
         target_error=0.1,
         top_proportion=0.1,
         num_samples=1000000,
+        comp_noise_type=comp_noise_type,
     )
-    print(probit_noise_level)
+    print(noise_level)
 
-probit_noise_level = 0.10
+if comp_noise_type == "probit":
+    noise_level = 0.1066
+elif comp_noise_type == "logit":
+    noise_level = 0.0874
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -60,13 +66,13 @@ experiment_manager(
     problem="hartmann",
     obj_func=obj_func,
     input_dim=input_dim,
-    comp_noise_type="probit",
-    comp_noise=probit_noise_level,
+    comp_noise_type=comp_noise_type,
+    comp_noise=noise_level,
     algo=algo,
     batch_size=2,
     num_init_queries=2 * (input_dim + 1),
     num_max_iter=100,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=True,
+    restart=False,
 )
