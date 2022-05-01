@@ -206,6 +206,8 @@ def pbo_trial(
         t0 = time.time()
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
         model = fit_model(datapoints, comparisons)
+        lambd = 1.0 / model.covar_module.outputscale.item()
+        print("Current estimate of lambda: " + str(lambd))
         t1 = time.time()
         model_training_time = t1 - t0
 
