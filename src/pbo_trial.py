@@ -186,6 +186,7 @@ def pbo_trial(
             batch_size=batch_size,
             input_dim=input_dim,
             algo_params=algo_params,
+            comp_noise=comp_noise,
         )
         t1 = time.time()
         acquisition_time = t1 - t0
@@ -269,6 +270,7 @@ def get_new_suggested_query(
     model: Model,
     batch_size,
     input_dim: int,
+    comp_noise: float,
     algo_params: Optional[Dict] = None,
 ) -> Tensor:
 
@@ -283,8 +285,11 @@ def get_new_suggested_query(
             model=model, utility=utility, sampler=sampler
         )
     elif algo == "EPOV":
+        output_scale = model.covar_module.outputscale.item()
+        real_lambd = comp_noise
+        lambd = real_lambd * output_scale
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        utility = Probit()
+        utility = Probit(noise_std=lambd)
         acquisition_function = qExpectedUtility(
             model=model, utility=utility, sampler=sampler
         )

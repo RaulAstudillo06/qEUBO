@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Union
+from typing import Optional, Union
 
 import torch
 from abc import ABC, abstractmethod
@@ -43,14 +43,19 @@ class MaxObjectiveValue(Utility):
 class Probit(Utility):
     r"""."""
 
-    def __init__(self) -> None:
+    def __init__(self, noise_std: Optional[Union[float, Tensor]] = 1.0) -> None:
         r"""Constructor for the Probit utility function class.
         Args:
             num_samples: .
         """
         super().__init__()
+        self.noise_std = torch.tensor(noise_std)
         self.std_norm = torch.distributions.normal.Normal(torch.zeros(1), torch.ones(1))
-        self.register_buffer("sqrt2", torch.sqrt(torch.tensor(2.0)))
+        self.register_buffer("sqrt2", torch.sqrt(torch.tensor(2.0)) * self.noise_std)
+        print("TEST BEGINS")
+        print(torch.sqrt(torch.tensor(2.0)))
+        print(self.sqrt2)
+        print("TEST ENDS")
 
     def forward(self, Y: Tensor) -> Tensor:
         r"""Evaluate the utility function on the candidate set Y.
