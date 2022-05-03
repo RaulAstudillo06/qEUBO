@@ -4,27 +4,38 @@ import torch
 from botorch.acquisition import AcquisitionFunction
 from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_model
-from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+
+# from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from src.models.likelihoods.pairwise import (
+    PairwiseProbitLikelihood,
+    PairwiseLogitLikelihood,
+)
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
-from torch.distributions import Normal
+from torch.distributions import Normal, Gumbel
 
 
 def fit_model(
     datapoints: Tensor,
     comparisons: Tensor,
+    likelihood: str,
     jitter=1e-4,
 ):
+    if likelihood == "probit":
+        likelihood_func = PairwiseProbitLikelihood()
+    elif likelihood == "logit":
+        likelihood_func = PairwiseLogitLikelihood()
     model = PairwiseGP(
         datapoints,
         comparisons,
+        likelihood=likelihood_func,
         jitter=jitter,
     )
 
-    mll = PairwiseLaplaceMarginalLogLikelihood(model)
+    mll = PairwiseLaplaceMarginalLogLikelihood(likelihood=likelihood_func, model=model)
     fit_gpytorch_model(mll)
     model = model.to(device=datapoints.device, dtype=datapoints.dtype)
-
     return model
 
 
@@ -83,6 +94,10 @@ def corrupt_obj_vals(obj_vals, noise_type, noise_level):
         normal = Normal(torch.tensor(0.0), torch.tensor(noise_level))
         noise = normal.sample(sample_shape=obj_vals.shape)
         corrupted_obj_vals = obj_vals + noise
+    elif noise_type == "logit":
+        gumbel = Gumbel(torch.tensor(0.0), torch.tensor(noise_level))
+        noise = gumbel.sample(sample_shape=obj_vals.shape)
+        corrupted_obj_vals = obj_vals + noise
 
     return corrupted_obj_vals
 
@@ -114,8 +129,8 @@ def optimize_acqf_and_get_suggested_query(
     """Optimizes the acquisition function, and returns the candidate solution."""
     input_dim = bounds.shape[1]
     q = batch_size
-    raw_samples = 100 * input_dim * batch_size
-    num_restarts = 10 * input_dim * batch_size
+    raw_samples = 80 * input_dim * batch_size
+    num_restarts = 4 * input_dim * batch_size
 
     candidates, acq_values = optimize_acqf(
         acq_function=acq_func,
@@ -124,9 +139,9 @@ def optimize_acqf_and_get_suggested_query(
         num_restarts=num_restarts,
         raw_samples=raw_samples,
         options={
-            "batch_limit": 2,
+            "batch_limit": 4,
             "maxiter": 100,
-            "nonnegative": True,
+            "nonnegative": False,
             "method": "L-BFGS-B",
         },
         return_best_only=False,

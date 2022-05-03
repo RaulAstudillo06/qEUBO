@@ -33,10 +33,11 @@ input_dim = 6
 # algo = "EMOV"
 # algo = "NEI"
 # algo = "TS"
-algo = "EPOV"
+# algo = "EPOV"
+algo = "ELOV"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 
 if False:
     noise_level = get_noise_level(

@@ -68,3 +68,26 @@ class Probit(Utility):
         prob1 = 1.0 - prob0
         utility = (prob0 * Y[..., 0]) + (prob1 * Y[..., 1])
         return utility
+
+
+class Logit(Utility):
+    r"""."""
+
+    def __init__(self) -> None:
+        r"""Constructor for the Probit utility function class.
+        Args:
+            num_samples: .
+        """
+        super().__init__()
+        self.soft_max = torch.nn.Softmax(dim=-1)
+
+    def forward(self, Y: Tensor) -> Tensor:
+        r"""Evaluate the utility function on the candidate set Y.
+        Args:
+            Y: A `(b) x 2`-dim Tensor of `(b)` t-batches with `2` objective values each.
+        Returns:
+            A `(b)`-dim Tensor of utility function values at the given outcome values `Y`.
+        """
+        probs = self.soft_max(Y)
+        utility = (probs * Y).sum(dim=-1)
+        return utility
