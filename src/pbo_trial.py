@@ -22,7 +22,6 @@ from src.utils import (
     get_obj_vals,
     generate_responses,
     optimize_acqf_and_get_suggested_query,
-    training_data_for_pairwise_gp,
 )
 
 
@@ -96,8 +95,12 @@ def pbo_trial(
 
             # Fit GP model
             t0 = time.time()
-            datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-            model = fit_model(datapoints, comparisons, likelihood=comp_noise_type)
+            model = fit_model(
+                queries,
+                responses,
+                model_type="pairwise_kernel_variational_gp",
+                likelihood=comp_noise_type,
+            )
             t1 = time.time()
             model_training_time = t1 - t0
 
@@ -118,8 +121,12 @@ def pbo_trial(
 
             # Fit GP model
             t0 = time.time()
-            datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-            model = fit_model(datapoints, comparisons, likelihood=comp_noise_type)
+            model = fit_model(
+                queries,
+                responses,
+                model_type="pairwise_kernel_variational_gp",
+                likelihood=comp_noise_type,
+            )
             t1 = time.time()
             model_training_time = t1 - t0
 
@@ -151,8 +158,12 @@ def pbo_trial(
 
         # Fit GP model
         t0 = time.time()
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons, likelihood=comp_noise_type)
+        model = fit_model(
+            queries,
+            responses,
+            model_type="pairwise_kernel_variational_gp",
+            likelihood=comp_noise_type,
+        )
         t1 = time.time()
         model_training_time = t1 - t0
 
@@ -205,8 +216,12 @@ def pbo_trial(
 
         # Fit GP model
         t0 = time.time()
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = fit_model(datapoints, comparisons, likelihood=comp_noise_type)
+        model = fit_model(
+            queries,
+            responses,
+            model_type="pairwise_kernel_variational_gp",
+            likelihood=comp_noise_type,
+        )
         lambd = 1.0 / model.covar_module.outputscale.item()
         print("Current estimate of lambda: " + str(lambd))
         t1 = time.time()

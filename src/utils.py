@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Optional
 
 import torch
 from botorch.acquisition import AcquisitionFunction
@@ -6,36 +6,43 @@ from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_model
 
 # from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
-from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.likelihoods.pairwise import (
     PairwiseProbitLikelihood,
     PairwiseLogitLikelihood,
 )
+from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
 from torch.distributions import Normal, Gumbel
 
 
 def fit_model(
-    datapoints: Tensor,
-    comparisons: Tensor,
-    likelihood: str,
-    jitter=1e-4,
+    queries: Tensor,
+    responses: Tensor,
+    model_type: str,
+    likelihood: Optional[str] = "logit",
 ):
-    if likelihood == "probit":
-        likelihood_func = PairwiseProbitLikelihood()
-    elif likelihood == "logit":
-        likelihood_func = PairwiseLogitLikelihood()
-    model = PairwiseGP(
-        datapoints,
-        comparisons,
-        likelihood=likelihood_func,
-        jitter=jitter,
-    )
+    if model_type == "pairwise_gp":
+        if likelihood == "probit":
+            likelihood_func = PairwiseProbitLikelihood()
+        elif likelihood == "logit":
+            likelihood_func = PairwiseLogitLikelihood()
+        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+        model = PairwiseGP(
+            datapoints,
+            comparisons,
+            likelihood=likelihood_func,
+            jitter=1e-4,
+        )
 
-    mll = PairwiseLaplaceMarginalLogLikelihood(likelihood=likelihood_func, model=model)
-    fit_gpytorch_model(mll)
-    model = model.to(device=datapoints.device, dtype=datapoints.dtype)
+        mll = PairwiseLaplaceMarginalLogLikelihood(
+            likelihood=likelihood_func, model=model
+        )
+        fit_gpytorch_model(mll)
+        model = model.to(device=queries.device, dtype=queries.dtype)
+    elif model_type == "pairwise_kernel_variational_gp":
+        model = PairwiseKernelVariationalGP(queries, responses)
     return model
 
 
@@ -87,7 +94,6 @@ def generate_responses(obj_vals, noise_type, noise_level):
 
 
 def corrupt_obj_vals(obj_vals, noise_type, noise_level):
-
     if noise_type == "noiseless":
         corrupted_obj_vals = obj_vals
     elif noise_type == "probit":
@@ -98,7 +104,6 @@ def corrupt_obj_vals(obj_vals, noise_type, noise_level):
         gumbel = Gumbel(torch.tensor(0.0), torch.tensor(noise_level))
         noise = gumbel.sample(sample_shape=obj_vals.shape)
         corrupted_obj_vals = obj_vals + noise
-
     return corrupted_obj_vals
 
 
