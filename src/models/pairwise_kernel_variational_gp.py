@@ -201,7 +201,7 @@ class PairwiseKernelVariationalGP(Model):
         self.queries = queries
         self.responses = responses
         self.input_dim = queries.shape[0]
-        train_x = queries.flatten(start_dim=1, end_dim=2)
+        train_x = queries.flatten(start_dim=-2, end_dim=-1)
         train_y = responses.squeeze(-1)
         bounds = torch.tensor(
             [[0, 1] for _ in range(queries.shape[-1])], dtype=torch.double
@@ -222,11 +222,10 @@ class PairwiseKernelVariationalGP(Model):
         mll = fit_gpytorch_model(mll)
         self.aux_model = aux_model
 
-    def posterior(self, X: Tensor) -> MultivariateNormal:
-        X0 = torch.zeros(size=X[..., [0], :].shape, requires_grad=False)
-        Xs = [torch.cat([X[..., [k], :], X0], dim=-1) for k in range(X.shape[-2])]
-        X_aux = torch.cat(Xs, dim=-2)
-        return self.aux_model.forward(X_aux)
+    def posterior(self, X: Tensor, posterior_transform=None) -> MultivariateNormal:
+        X0 = torch.zeros(size=X.shape, requires_grad=False)
+        X_aug = torch.cat([X, X0], dim=-1)
+        return self.aux_model.posterior(X_aug)
 
     def forward(self, X: Tensor) -> MultivariateNormal:
         return self.posterior(X)

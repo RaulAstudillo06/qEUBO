@@ -222,8 +222,8 @@ def pbo_trial(
             model_type="pairwise_kernel_variational_gp",
             likelihood=comp_noise_type,
         )
-        lambd = 1.0 / model.covar_module.outputscale.item()
-        print("Current estimate of lambda: " + str(lambd))
+        # lambd = 1.0 / model.covar_module.outputscale.item()
+        # print("Current estimate of lambda: " + str(lambd))
         t1 = time.time()
         model_training_time = t1 - t0
 
