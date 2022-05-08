@@ -202,7 +202,7 @@ class PairwiseKernelVariationalGP(Model):
         self.responses = responses
         self.input_dim = queries.shape[0]
         train_x = queries.flatten(start_dim=-2, end_dim=-1)
-        train_y = responses.squeeze(-1)
+        train_y = 1.0 - responses.squeeze(-1)
         bounds = torch.tensor(
             [[0, 1] for _ in range(queries.shape[-1])], dtype=torch.double
         ).T
