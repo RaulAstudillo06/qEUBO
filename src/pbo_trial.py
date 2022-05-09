@@ -98,7 +98,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
-                model_type="pairwise_gp",
+                model_type="pairwise_kernel_variational_gp",
                 likelihood=comp_noise_type,
             )
             t1 = time.time()
@@ -124,7 +124,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
-                model_type="pairwise_gp",
+                model_type="pairwise_kernel_variational_gp",
                 likelihood=comp_noise_type,
             )
             t1 = time.time()
@@ -161,7 +161,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
-            model_type="pairwise_gp",
+            model_type="pairwise_kernel_variational_gp",
             likelihood=comp_noise_type,
         )
         t1 = time.time()
@@ -219,7 +219,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
-            model_type="pairwise_gp",
+            model_type="pairwise_kernel_variational_gp",
             likelihood=comp_noise_type,
         )
         # lambd = 1.0 / model.covar_module.outputscale.item()
