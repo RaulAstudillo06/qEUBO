@@ -32,13 +32,14 @@ def pbo_trial(
     comp_noise_type: str,
     comp_noise: float,
     algo: str,
-    algo_params: Optional[Dict],
     batch_size: int,
     num_init_queries: int,
     num_max_iter: int,
     trial: int,
     restart: bool,
     ignore_failures: bool = False,
+    model_type: str = "pairwise_kernel_variational_gp",
+    algo_params: Optional[Dict] = None,
 ) -> None:
 
     algo_id = algo
@@ -98,7 +99,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
-                model_type="pairwise_kernel_variational_gp",
+                model_type=model_type,
                 likelihood=comp_noise_type,
             )
             t1 = time.time()
@@ -124,7 +125,7 @@ def pbo_trial(
             model = fit_model(
                 queries,
                 responses,
-                model_type="pairwise_kernel_variational_gp",
+                model_type=model_type,
                 likelihood=comp_noise_type,
             )
             t1 = time.time()
@@ -161,7 +162,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
-            model_type="pairwise_kernel_variational_gp",
+            model_type=model_type,
             likelihood=comp_noise_type,
         )
         t1 = time.time()
@@ -198,6 +199,7 @@ def pbo_trial(
             input_dim=input_dim,
             algo_params=algo_params,
             comp_noise=comp_noise,
+            model_type=model_type,
         )
         t1 = time.time()
         acquisition_time = t1 - t0
@@ -219,7 +221,7 @@ def pbo_trial(
         model = fit_model(
             queries,
             responses,
-            model_type="pairwise_kernel_variational_gp",
+            model_type=model_type,
             likelihood=comp_noise_type,
         )
         # lambd = 1.0 / model.covar_module.outputscale.item()
@@ -286,6 +288,7 @@ def get_new_suggested_query(
     batch_size,
     input_dim: int,
     comp_noise: float,
+    model_type: str,
     algo_params: Optional[Dict] = None,
 ) -> Tensor:
 
@@ -316,8 +319,18 @@ def get_new_suggested_query(
         )
     elif algo == "NEI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
+        if model_type == "pairwise_gp":
+            X_baseline = model.datapoints.clone()
+        elif model_type == "pairwise_kernel_variational_gp":
+            X_baseline = model.queries.clone()
+            X_baseline = X_baseline.view(
+                (X_baseline.shape[0] * X_baseline.shape[1], X_baseline.shape[2])
+            )
         acquisition_function = qNoisyExpectedImprovement(
-            model=model, X_baseline=model.datapoints.clone(), sampler=sampler
+            model=model,
+            X_baseline=X_baseline,
+            sampler=sampler,
+            prune_baseline=True,
         )
     elif algo == "TS":
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
@@ -332,7 +345,6 @@ def get_new_suggested_query(
     )
 
     new_query = new_query.unsqueeze(0)
-
     return new_query
 
 
