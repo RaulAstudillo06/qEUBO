@@ -3,6 +3,8 @@ from botorch.acquisition.analytic import PosteriorMean
 from botorch.utils.gp_sampling import get_gp_samples
 from copy import deepcopy
 
+from src.models.pairwise_gp import PairwiseGP
+from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.utils import (
     optimize_acqf_and_get_suggested_query,
 )
@@ -28,13 +30,31 @@ def gen_thompson_sampling_query(model, batch_size, bounds):
 
 def get_pairwise_gp_rff_sample(model, n_samples):
     model = model.eval()
-    # force the model to infer utility
-    model.posterior(model.datapoints)
-    modified_model = deepcopy(model)
+    if isinstance(model, PairwiseGP):
+        # force the model to infer utility
+        model.posterior(model.datapoints)
+        modified_model = deepcopy(model)
+        modified_model.likelihood.noise = torch.tensor(1.0).double()
+        modified_model.train_targets = model.utility
+    elif isinstance(model, PairwiseKernelVariationalGP):
+        modified_model = deepcopy(model)
+        queries = modified_model.queries.clone()
+        queries_items = queries.view(
+            (queries.shape[0] * queries.shape[1], queries.shape[2])
+        )
+        modified_model.train_inputs = [queries_items]
+        sample_at_queries_items = modified_model.posterior(queries_items).sample()
+        modified_model.train_targets = sample_at_queries_items.view(
+            (queries_items.shape[0],)
+        )
+        modified_model.covar_module = (
+            modified_model.aux_model.covar_module.latent_kernel
+        )
 
-    modified_model.likelihood.noise = torch.tensor(1.0).double()
+        class LikelihoodForRFF:
+            noise = torch.tensor(1.0).double()
 
-    modified_model.train_targets = model.utility
+        modified_model.likelihood = LikelihoodForRFF()
 
     gp_samples = get_gp_samples(
         model=modified_model,

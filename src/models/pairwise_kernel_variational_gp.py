@@ -200,16 +200,20 @@ class PairwiseKernelVariationalGP(Model):
         super().__init__()
         self.queries = queries
         self.responses = responses
-        self.input_dim = queries.shape[0]
+        self.train_inputs = None
+        self.train_targets = None
+        self.covar_module = None
+        self.input_dim = queries.shape[-1]
         train_x = queries.flatten(start_dim=-2, end_dim=-1)
         train_y = 1.0 - responses.squeeze(-1)
         bounds = torch.tensor(
-            [[0, 1] for _ in range(queries.shape[-1])], dtype=torch.double
+            [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
         ).T
         bounds_aug = torch.cat((bounds, bounds), dim=1)
         inducing_points = draw_sobol_samples(
-            bounds=bounds_aug, n=100 * queries.shape[-1], q=1
+            bounds=bounds_aug, n=2 ** self.input_dim, q=1
         ).squeeze(1)
+        inducing_points = torch.cat([inducing_points, train_x], dim=0)
         scales = bounds[1, :] - bounds[0, :]
         aux_model = PairwiseKernelVariationalGPAux(
             train_x, train_y, inducing_points, scales

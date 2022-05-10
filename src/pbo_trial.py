@@ -256,7 +256,7 @@ def pbo_trial(
         if not os.path.exists(results_folder + "runtimes/"):
             os.makedirs(results_folder + "runtimes/")
 
-        queries_reshaped = queries.numpy().reshape(responses.shape[0], -1)
+        queries_reshaped = queries.numpy().reshape(queries.shape[0], -1)
         np.savetxt(
             results_folder + "queries/queries_" + str(trial) + ".txt", queries_reshaped
         )
