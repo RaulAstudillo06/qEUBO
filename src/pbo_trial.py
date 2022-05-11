@@ -13,6 +13,9 @@ from botorch.sampling.samplers import SobolQMCNormalSampler
 from torch import Tensor
 
 from src.acquisition_functions.expected_utility import qExpectedUtility
+from src.acquisition_functions.preferential_knowledge_gradient import (
+    PreferentialKnowledgeGradient,
+)
 from src.acquisition_functions.thompson_sampling import gen_thompson_sampling_query
 from src.utility import MaxObjectiveValue, Probit, Logit
 from src.utils import (
@@ -38,7 +41,7 @@ def pbo_trial(
     trial: int,
     restart: bool,
     ignore_failures: bool = False,
-    model_type: str = "pairwise_kernel_variational_gp",
+    model_type: str = "pairwise_gp",
     algo_params: Optional[Dict] = None,
 ) -> None:
 
@@ -302,6 +305,8 @@ def get_new_suggested_query(
         acquisition_function = qExpectedUtility(
             model=model, utility=utility, sampler=sampler
         )
+    elif algo == "PKG":
+        acquisition_function = PreferentialKnowledgeGradient(model=model)
     elif algo == "EPOV":
         output_scale = model.covar_module.outputscale.item()
         real_lambd = comp_noise
@@ -341,7 +346,7 @@ def get_new_suggested_query(
     new_query = optimize_acqf_and_get_suggested_query(
         acq_func=acquisition_function,
         bounds=standard_bounds,
-        batch_size=batch_size,
+        batch_size=4 if algo == "PKG" else batch_size,
     )
 
     new_query = new_query.unsqueeze(0)
