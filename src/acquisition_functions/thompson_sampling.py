@@ -60,7 +60,7 @@ def get_pairwise_gp_rff_sample(model, n_samples):
         model=modified_model,
         num_outputs=1,
         n_samples=n_samples,
-        num_rff_features=500,
+        num_rff_features=1000,
     )
 
     return gp_samples
