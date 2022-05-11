@@ -92,6 +92,7 @@ class PairwiseGP(Model, GP):
             comparisons: A `batch_shape x m x 2` training comparisons;
                 comparisons[i] is a noisy indicator suggesting the utility value
                 of comparisons[i, 0]-th is greater than comparisons[i, 1]-th.
+            likelihood: A PairwiseLikelihood.
             covar_module: Covariance module.
             input_transform: An input transform that is applied in the model's
                 forward pass.
@@ -161,7 +162,7 @@ class PairwiseGP(Model, GP):
                         transform=None, initial_value=ls_prior_mode
                     ),
                 ),
-                outputscale_prior=SmoothedBoxPrior(a=1.0, b=4.0),
+                outputscale_prior=SmoothedBoxPrior(a=1, b=4),
             )
 
         self.covar_module = covar_module
@@ -231,7 +232,7 @@ class PairwiseGP(Model, GP):
             mat_inv = torch.cholesky_inverse(mat_chol)
         elif len(mat_chol.shape) > 2 and (mat_chol.shape[-1] == mat_chol.shape[-2]):
             batch_eye = batch_eye.repeat(*(mat_chol.shape[:-2]), 1, 1)
-            chol_inv = torch.triangular_solve(batch_eye, mat_chol, upper=False).solution
+            chol_inv = torch.linalg.solve_triangular(mat_chol, batch_eye, upper=False)
             mat_inv = chol_inv.transpose(-1, -2) @ chol_inv
 
         return mat_inv
@@ -530,16 +531,11 @@ class PairwiseGP(Model, GP):
         x = x0
         eye = None
         while i < max_iter and diff > xtol:
-            hl = self.likelihood_hess = self.likelihood.negative_log_hessian_sum(
-                utility=x, D=D
-            )
+            hl = self.likelihood.negative_log_hessian_sum(utility=x, D=D)
+            self.likelihood_hess = hl
             cov_hl = covar @ hl
             if eye is None:
-                eye = torch.eye(
-                    cov_hl.size(-1),
-                    dtype=dp.dtype,
-                    device=dp.device,
-                ).expand(cov_hl.shape)
+                eye = torch.diag_embed(torch.ones(cov_hl.shape[:-1]))
             cov_hl = cov_hl + eye  # add 1 to cov_hl
             g = self._grad_posterior_f(x, dp, D, DT, ch, ci)
             cov_g = covar @ g.unsqueeze(-1)
@@ -548,7 +544,26 @@ class PairwiseGP(Model, GP):
             diff = torch.norm(x - x_next)
             x = x_next
             i += 1
+
         return x
+
+    def _check_strict_input(self, inputs, t_inputs, target_or_inputs):
+        for input_, t_input in zip(inputs, t_inputs or (None,)):
+            for attr in {"shape", "dtype", "device"}:
+                expected_attr = getattr(t_input, attr, None)
+                found_attr = getattr(input_, attr, None)
+                if expected_attr != found_attr:
+                    msg = (
+                        "Cannot modify {attr} of {t_or_i} "
+                        "(expected {e_attr}, found {f_attr})."
+                    )
+                    msg = msg.format(
+                        attr=attr,
+                        e_attr=expected_attr,
+                        f_attr=found_attr,
+                        t_or_i=target_or_inputs,
+                    )
+                    raise RuntimeError(msg)
 
     # ============== public APIs ==============
 
@@ -605,19 +620,8 @@ class PairwiseGP(Model, GP):
                 for input_ in inputs
             )
             if strict:
-                for input_, t_input in zip(inputs, self.train_inputs or (None,)):
-                    for attr in {"shape", "dtype", "device"}:
-                        expected_attr = getattr(t_input, attr, None)
-                        found_attr = getattr(input_, attr, None)
-                        if expected_attr != found_attr:
-                            msg = (
-                                "Cannot modify {attr} of inputs "
-                                "(expected {e_attr}, found {f_attr})."
-                            )
-                            msg = msg.format(
-                                attr=attr, e_attr=expected_attr, f_attr=found_attr
-                            )
-                            raise RuntimeError(msg)
+                self._check_strict_input(inputs, self.train_inputs, "inputs")
+
             self.datapoints = inputs[0]
             # Compatibility variables with fit_gpytorch_*
             # alias for datapoints ("train_inputs")
@@ -625,18 +629,8 @@ class PairwiseGP(Model, GP):
 
         if comparisons is not None:
             if strict:
-                for attr in {"shape", "dtype", "device"}:
-                    expected_attr = getattr(self.train_targets, attr, None)
-                    found_attr = getattr(comparisons, attr, None)
-                    if expected_attr != found_attr:
-                        msg = (
-                            "Cannot modify {attr} of targets "
-                            "(expected {e_attr}, found {f_attr})."
-                        )
-                        msg = msg.format(
-                            attr=attr, e_attr=expected_attr, f_attr=found_attr
-                        )
-                        raise RuntimeError(msg)
+                self._check_strict_input([comparisons], [self.train_targets], "targets")
+
             # convert to long so that it can be used as index and
             # compatible with Tensor.scatter_
             self.comparisons = comparisons.long()
@@ -831,7 +825,7 @@ class PairwiseGP(Model, GP):
         X: Tensor,
         output_indices: Optional[List[int]] = None,
         observation_noise: bool = False,
-        posterior_transform: Optional[List] = None,
+        posterior_transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> Posterior:
         r"""Computes the posterior over model outputs at the provided points.
@@ -905,6 +899,12 @@ class PairwiseGP(Model, GP):
 
             # TODO: be smart about how we can update covar matrix here
             new_model.set_train_data(new_datapoints, new_comparisons, update_model=True)
+
+            # Take a newton step on the posterior MAP point to fill in gradients for
+            # pytorch. This is essential for the conditioned model's gradient to work
+            new_model.utility = new_model._util_newton_updates(
+                new_datapoints, new_model.utility, max_iter=1
+            )
         return new_model
 
 
@@ -929,21 +929,18 @@ class PairwiseLaplaceMarginalLogLikelihood(MarginalLogLikelihood):
 
         f_map = post.mean.squeeze(-1)
 
-        log_likelihood = likelihood.p(utility=f_map, D=model.D, log=True)
-        log_likelihood = -(torch.sum(log_likelihood, dim=-1))
+        log_likelihood = likelihood.log_p(utility=f_map, D=model.D)
+        neg_log_likelihood_sum = -(torch.sum(log_likelihood, dim=-1))
 
         # 1/2 f_map^T @ covar_inv @ f_map
         inv_prod = torch.cholesky_solve(f_map.unsqueeze(-1), model.covar_chol)
         log_prior = 0.5 * (f_map.unsqueeze(-2) @ inv_prod).squeeze(-1).squeeze(-1)
-        log_posterior = log_likelihood + log_prior
+        log_posterior = neg_log_likelihood_sum + log_prior
         # log_posterior is the S loss function in [Chu2005preference]_
         log_posterior = -log_posterior.clamp(min=0)
 
         mll = model.covar @ model.likelihood_hess
-        eye = torch.eye(
-            mll.size(-1), dtype=model.datapoints.dtype, device=model.datapoints.device
-        ).expand(mll.shape)
-        mll = mll + eye
+        mll = mll + torch.diag_embed(torch.ones(mll.shape[:-1]))
         mll = -0.5 * torch.logdet(mll)
 
         mll = mll + log_posterior
