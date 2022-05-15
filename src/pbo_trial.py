@@ -12,12 +12,14 @@ from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from torch import Tensor
 
-from src.acquisition_functions.expected_utility import qExpectedUtility
+from src.acquisition_functions.emov import (
+    ExpectedMaxObjectiveValue,
+    qExpectedMaxObjectiveValue,
+)
 from src.acquisition_functions.preferential_knowledge_gradient import (
     PreferentialKnowledgeGradient,
 )
 from src.acquisition_functions.thompson_sampling import gen_thompson_sampling_query
-from src.utility import MaxObjectiveValue, Probit, Logit
 from src.utils import (
     fit_model,
     generate_initial_data,
@@ -300,28 +302,11 @@ def get_new_suggested_query(
             num_queries=1, batch_size=batch_size, input_dim=input_dim
         )
     elif algo == "EMOV":
-        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        utility = MaxObjectiveValue()
-        acquisition_function = qExpectedUtility(
-            model=model, utility=utility, sampler=sampler
-        )
+        acquisition_function = ExpectedMaxObjectiveValue(model=model)
+    elif algo == "MC-EMOV":
+        acquisition_function = qExpectedMaxObjectiveValue(model=model)
     elif algo == "PKG":
         acquisition_function = PreferentialKnowledgeGradient(model=model)
-    elif algo == "EPOV":
-        output_scale = model.covar_module.outputscale.item()
-        real_lambd = comp_noise
-        lambd = real_lambd * output_scale
-        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        utility = Probit(noise_std=lambd)
-        acquisition_function = qExpectedUtility(
-            model=model, utility=utility, sampler=sampler
-        )
-    elif algo == "ELOV":
-        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        utility = Logit()
-        acquisition_function = qExpectedUtility(
-            model=model, utility=utility, sampler=sampler
-        )
     elif algo == "NEI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
         if model_type == "pairwise_gp":
