@@ -31,29 +31,28 @@ input_dim = 2
 
 # Algos
 # algo = "Random"
-# algo = "EMOV"
+algo = "EMOV"
 # algo = "NEI"
 # algo = "TS"
-algo = "EPOV"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 
 if False:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
-        target_error=0.1,
-        top_proportion=0.1,
-        num_samples=100000,
+        target_error=0.2,
+        top_proportion=0.01,
+        num_samples=1000000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 0.2195
+    noise_level = 0.0746
 elif comp_noise_type == "logit":
-    noise_level = 0.1763
+    noise_level = 0.0617
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -72,7 +71,7 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=2 * (input_dim + 1),
-    num_max_iter=50,
+    num_max_iter=100,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=True,

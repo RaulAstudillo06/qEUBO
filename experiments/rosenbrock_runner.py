@@ -32,11 +32,10 @@ def obj_func(X: Tensor) -> Tensor:
 
 # Algos
 # algo = "Random"
-# algo = "EMOV"
-algo = "NEI"
+algo = "EMOV"
+# algo = "NEI"
 # algo = "TS"
-# algo = "EPOV"
-# algo = "ELOV"
+# algo = "PKG"
 
 # estimate noise level
 comp_noise_type = "logit"
@@ -45,17 +44,17 @@ if False:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
-        target_error=0.1,
-        top_proportion=0.1,
-        num_samples=1000000,
+        target_error=0.2,
+        top_proportion=0.01,
+        num_samples=10000000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 8.5171
+    noise_level = 2.0371
 elif comp_noise_type == "logit":
-    noise_level = 7.0534
+    noise_level = 1.7046
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -77,5 +76,5 @@ experiment_manager(
     num_max_iter=100,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )
