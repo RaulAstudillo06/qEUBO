@@ -20,6 +20,7 @@ def gen_thompson_sampling_query(model, batch_size, bounds):
             bounds=bounds,
             batch_size=1,
             batch_limit=1,
+            init_batch_limit=1,
         )
         query.append(new_x.clone())
 
