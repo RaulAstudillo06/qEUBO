@@ -131,12 +131,13 @@ def optimize_acqf_and_get_suggested_query(
     bounds: Tensor,
     batch_size: int,
     batch_limit: Optional[int] = 4,
+    init_batch_limit: Optional[int] = 20,
 ) -> Tensor:
     """Optimizes the acquisition function, and returns the candidate solution."""
     input_dim = bounds.shape[1]
     q = batch_size
-    raw_samples = 80 * input_dim * batch_size
-    num_restarts = 4 * input_dim * batch_size
+    raw_samples = 120 * input_dim
+    num_restarts = 4 * input_dim
 
     candidates, acq_values = optimize_acqf(
         acq_function=acq_func,
@@ -146,6 +147,7 @@ def optimize_acqf_and_get_suggested_query(
         raw_samples=raw_samples,
         options={
             "batch_limit": batch_limit,
+            "init_batch_limit": init_batch_limit,
             "maxiter": 100,
             "nonnegative": False,
             "method": "L-BFGS-B",
