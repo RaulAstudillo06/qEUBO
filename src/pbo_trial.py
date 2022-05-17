@@ -359,7 +359,9 @@ def get_new_suggested_query(
         )
     elif algo == "TS":
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-        return gen_thompson_sampling_query(model, batch_size, standard_bounds)
+        return gen_thompson_sampling_query(
+            model, batch_size, standard_bounds, num_restarts, raw_samples
+        )
 
     new_query = optimize_acqf_and_get_suggested_query(
         acq_func=acquisition_function,

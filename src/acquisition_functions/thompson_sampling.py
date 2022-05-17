@@ -10,7 +10,7 @@ from src.utils import (
 )
 
 
-def gen_thompson_sampling_query(model, batch_size, bounds):
+def gen_thompson_sampling_query(model, batch_size, bounds, num_restarts, raw_samples):
     query = []
     for _ in range(batch_size):
         model_rff_sample = get_pairwise_gp_rff_sample(model=model, n_samples=1)
@@ -18,6 +18,8 @@ def gen_thompson_sampling_query(model, batch_size, bounds):
         new_x = optimize_acqf_and_get_suggested_query(
             acq_func=acquisition_function,
             bounds=bounds,
+            num_restarts=num_restarts,
+            raw_samples=raw_samples,
             batch_size=1,
             batch_limit=1,
             init_batch_limit=1,
