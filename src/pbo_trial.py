@@ -48,7 +48,7 @@ def pbo_trial(
     trial: int,
     restart: bool,
     ignore_failures: bool = False,
-    model_type: str = "pairwise_gp",
+    model_type: str = "pairwise_kernel_variational_gp",
     algo_params: Optional[Dict] = None,
 ) -> None:
 
@@ -335,11 +335,12 @@ def get_new_suggested_query(
             X_baseline = X_baseline.view(
                 (X_baseline.shape[0] * X_baseline.shape[1], X_baseline.shape[2])
             )
+        posterior = model.posterior(X_baseline)
+        mean = posterior.mean
 
-        best_f = model(X_baseline).mean.max().item()
         acquisition_function = qExpectedImprovement(
             model=model,
-            best_f=best_f,
+            best_f=mean.max().item(),
             sampler=sampler,
         )
     elif algo == "NEI":

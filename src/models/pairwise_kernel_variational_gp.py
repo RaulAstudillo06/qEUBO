@@ -211,7 +211,7 @@ class PairwiseKernelVariationalGP(Model):
         ).T
         bounds_aug = torch.cat((bounds, bounds), dim=1)
         inducing_points = draw_sobol_samples(
-            bounds=bounds_aug, n=2 ** self.input_dim, q=1
+            bounds=bounds_aug, n=2 ** (self.input_dim + 2), q=1
         ).squeeze(1)
         inducing_points = torch.cat([inducing_points, train_x], dim=0)
         scales = bounds[1, :] - bounds[0, :]
