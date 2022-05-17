@@ -311,9 +311,9 @@ def get_new_suggested_query(
         return generate_random_queries(
             num_queries=1, batch_size=batch_size, input_dim=input_dim
         )
-    elif algo == "EMOV":
+    elif algo == "ANALYT_EMOV":
         acquisition_function = ExpectedMaxObjectiveValue(model=model)
-    elif algo == "MC-EMOV":
+    elif algo == "EMOV":
         acquisition_function = qExpectedMaxObjectiveValue(model=model)
     elif algo == "PKG":
         acquisition_function = PreferentialKnowledgeGradient(model=model)
