@@ -7,7 +7,11 @@ import os
 import sys
 import time
 import torch
-from botorch.acquisition import PosteriorMean, qNoisyExpectedImprovement
+from botorch.acquisition import (
+    PosteriorMean,
+    qExpectedImprovement,
+    qNoisyExpectedImprovement,
+)
 from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from torch import Tensor
@@ -24,6 +28,7 @@ from src.utils import (
     fit_model,
     generate_initial_data,
     generate_random_queries,
+    get_eubo_init_for_pkg,
     get_obj_vals,
     generate_responses,
     optimize_acqf_and_get_suggested_query,
@@ -297,6 +302,11 @@ def get_new_suggested_query(
     algo_params: Optional[Dict] = None,
 ) -> Tensor:
 
+    standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
+    num_restarts = 4 * input_dim
+    raw_samples = 120 * input_dim
+    batch_initial_conditions = None
+
     if algo == "Random":
         return generate_random_queries(
             num_queries=1, batch_size=batch_size, input_dim=input_dim
@@ -307,6 +317,31 @@ def get_new_suggested_query(
         acquisition_function = qExpectedMaxObjectiveValue(model=model)
     elif algo == "PKG":
         acquisition_function = PreferentialKnowledgeGradient(model=model)
+    elif algo == "PKG_EUBO_INIT":
+        acquisition_function = PreferentialKnowledgeGradient(model=model)
+        batch_initial_conditions = get_eubo_init_for_pkg(
+            model=model,
+            pkg_acqf=acquisition_function,
+            bounds=standard_bounds,
+            num_restarts=num_restarts,
+            raw_samples=raw_samples,
+        )
+    elif algo == "EI":
+        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
+        if model_type == "pairwise_gp":
+            X_baseline = model.datapoints.clone()
+        elif model_type == "pairwise_kernel_variational_gp":
+            X_baseline = model.queries.clone()
+            X_baseline = X_baseline.view(
+                (X_baseline.shape[0] * X_baseline.shape[1], X_baseline.shape[2])
+            )
+
+        best_f = model(X_baseline).mean.max().item()
+        acquisition_function = qExpectedImprovement(
+            model=model,
+            best_f=best_f,
+            sampler=sampler,
+        )
     elif algo == "NEI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
         if model_type == "pairwise_gp":
@@ -326,12 +361,13 @@ def get_new_suggested_query(
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
         return gen_thompson_sampling_query(model, batch_size, standard_bounds)
 
-    standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-
     new_query = optimize_acqf_and_get_suggested_query(
         acq_func=acquisition_function,
         bounds=standard_bounds,
         batch_size=4 if algo == "PKG" else batch_size,
+        num_restarts=num_restarts,
+        raw_samples=raw_samples,
+        batch_initial_conditions=batch_initial_conditions,
     )
 
     new_query = new_query.unsqueeze(0)
@@ -345,12 +381,16 @@ def compute_obj_val_at_max_post_mean(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
+    num_restarts = 4 * input_dim
+    raw_samples = 120 * input_dim
 
     post_mean_func = PosteriorMean(model=model)
     max_post_mean_func = optimize_acqf_and_get_suggested_query(
         acq_func=post_mean_func,
         bounds=standard_bounds,
         batch_size=1,
+        num_restarts=num_restarts,
+        raw_samples=raw_samples,
     )
 
     obj_val_at_max_post_mean_func = obj_func(max_post_mean_func).item()

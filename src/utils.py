@@ -1,11 +1,13 @@
 from typing import Optional
 
 import torch
-from botorch.acquisition import AcquisitionFunction
+from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_model
+from botorch.optim.initializers import gen_batch_initial_conditions
 
 # from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
 from src.models.likelihoods.pairwise import (
     PairwiseProbitLikelihood,
     PairwiseLogitLikelihood,
@@ -14,7 +16,7 @@ from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelih
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
-from torch.distributions import Normal, Gumbel
+from torch.distributions import Bernoulli, Normal, Gumbel
 
 
 def fit_model(
@@ -26,7 +28,7 @@ def fit_model(
     if model_type == "pairwise_gp":
         if likelihood == "probit":
             likelihood_func = PairwiseProbitLikelihood()
-        elif likelihood == "logit":
+        else:
             likelihood_func = PairwiseLogitLikelihood()
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
         model = PairwiseGP(
@@ -104,6 +106,14 @@ def corrupt_obj_vals(obj_vals, noise_type, noise_level):
         gumbel = Gumbel(torch.tensor(0.0), torch.tensor(noise_level))
         noise = gumbel.sample(sample_shape=obj_vals.shape)
         corrupted_obj_vals = obj_vals + noise
+    elif noise_type == "constant":
+        corrupted_obj_vals = obj_vals.clone()
+        n = obj_vals.shape[0]
+        for i in range(n):
+            coin_toss = Bernoulli(noise_level).sample().item()
+            if coin_toss == 1.0:
+                corrupted_obj_vals[i, 0] = obj_vals[i, 1]
+                corrupted_obj_vals[i, 1] = obj_vals[i, 0]
     return corrupted_obj_vals
 
 
@@ -130,21 +140,21 @@ def optimize_acqf_and_get_suggested_query(
     acq_func: AcquisitionFunction,
     bounds: Tensor,
     batch_size: int,
+    num_restarts: int,
+    raw_samples: int,
+    batch_initial_conditions: Optional[Tensor] = None,
     batch_limit: Optional[int] = 4,
     init_batch_limit: Optional[int] = 20,
 ) -> Tensor:
     """Optimizes the acquisition function, and returns the candidate solution."""
-    input_dim = bounds.shape[1]
-    q = batch_size
-    raw_samples = 120 * input_dim
-    num_restarts = 4 * input_dim
 
     candidates, acq_values = optimize_acqf(
         acq_function=acq_func,
         bounds=bounds,
-        q=q,
+        q=batch_size,
         num_restarts=num_restarts,
         raw_samples=raw_samples,
+        batch_initial_conditions=batch_initial_conditions,
         options={
             "batch_limit": batch_limit,
             "init_batch_limit": init_batch_limit,
@@ -164,3 +174,43 @@ def optimize_acqf_and_get_suggested_query(
     print(candidates.squeeze())
     new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
     return new_x
+
+
+def get_eubo_init_for_pkg(model, pkg_acqf, bounds, num_restarts, raw_samples):
+    aux_num_restarts = int(num_restarts / 4)
+    post_mean_func = PosteriorMean(model=model)
+    max_post_mean_func = optimize_acqf_and_get_suggested_query(
+        acq_func=post_mean_func,
+        bounds=bounds,
+        batch_size=1,
+        num_restarts=aux_num_restarts,
+        raw_samples=raw_samples,
+        batch_limit=aux_num_restarts,
+    )
+    max_post_mean_func = max_post_mean_func.squeeze(0)
+
+    emov_acqf = ExpectedMaxObjectiveValue(model=model)
+
+    max_emov_acqf = optimize_acqf_and_get_suggested_query(
+        acq_func=emov_acqf,
+        bounds=bounds,
+        batch_size=2,
+        num_restarts=aux_num_restarts,
+        raw_samples=raw_samples,
+        batch_limit=aux_num_restarts,
+    )
+
+    pkg_initial_conditions = gen_batch_initial_conditions(
+        acq_function=pkg_acqf,
+        bounds=bounds,
+        q=4,
+        raw_samples=raw_samples,
+        num_restarts=aux_num_restarts * 2,
+    )
+
+    for i in range(aux_num_restarts):
+        pkg_initial_conditions[i, 2, :] = max_post_mean_func.clone()
+        pkg_initial_conditions[i, 3, :] = max_post_mean_func.clone()
+
+    pkg_initial_conditions[0, :2, :] = max_emov_acqf
+    return pkg_initial_conditions
