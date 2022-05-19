@@ -32,15 +32,15 @@ def obj_func(X: Tensor) -> Tensor:
 
 # Algos
 # algo = "Random"
-# algo = "EMOV"
+algo = "EMOV"
 # algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
-algo = "PKG_EUBO_INIT"
+# algo = "PKG_EUBO_INIT"
 
 # estimate noise level
-comp_noise_type = "constant"
+comp_noise_type = "probit"
 
 if False:
     noise_level = get_noise_level(
