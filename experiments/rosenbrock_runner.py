@@ -46,7 +46,7 @@ if False:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
-        target_error=0.2,
+        target_error=0.1,
         top_proportion=0.01,
         num_samples=10000000,
         comp_noise_type=comp_noise_type,
@@ -54,7 +54,7 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 2.0371
+    noise_level = [0.8965, 2.0371, 3.8107]
 elif comp_noise_type == "logit":
     noise_level = 1.7046
 elif comp_noise_type == "constant":
