@@ -41,6 +41,7 @@ algo = "EMOV"
 
 # estimate noise level
 comp_noise_type = "probit"
+noise_level_id = 3
 
 if False:
     noise_level = get_noise_level(
@@ -54,7 +55,8 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = [0.8965, 2.0371, 3.8107]
+    noise_levels = [0.8965, 2.0371, 3.8107]
+    noise_level = noise_levels[noise_level_id - 1]
 elif comp_noise_type == "logit":
     noise_level = 1.7046
 elif comp_noise_type == "constant":
