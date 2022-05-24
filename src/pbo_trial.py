@@ -49,7 +49,7 @@ def pbo_trial(
     restart: bool,
     ignore_failures: bool = False,
     model_type: str = "pairwise_kernel_variational_gp",
-    add_baseline_point=True,
+    add_baseline_point=False,
     algo_params: Optional[Dict] = None,
 ) -> None:
 
@@ -166,6 +166,7 @@ def pbo_trial(
             obj_func=obj_func,
             comp_noise_type=comp_noise_type,
             comp_noise=comp_noise,
+            add_baseline_point=add_baseline_point,
             seed=trial,
         )
 
