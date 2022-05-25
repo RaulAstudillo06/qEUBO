@@ -39,13 +39,14 @@ algo = "EMOV"
 # algo = "PKG"
 
 # estimate noise level
-comp_noise_type = "logit"
+comp_noise_type = "probit"
+noise_level_id = 2
 
 if False:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
-        target_error=0.2,
+        target_error=0.1,
         top_proportion=0.01,
         num_samples=10000000,
         comp_noise_type=comp_noise_type,
@@ -53,7 +54,8 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 0.0665
+    noise_levels = [0.0283, 0.0669, 0.1323]
+    noise_level = noise_levels[noise_level_id - 1]
 elif comp_noise_type == "logit":
     noise_level = 0.0565
 
