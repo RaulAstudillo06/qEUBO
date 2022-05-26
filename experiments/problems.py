@@ -1,5 +1,6 @@
 import torch
 from botorch.test_functions.base import MultiObjectiveTestProblem
+from botorch.test_functions.multi_objective import VehicleSafety
 from torch import Tensor
 
 
@@ -220,7 +221,31 @@ def car_cab_obj_func(X: Tensor) -> Tensor:
     beta2 = torch.tensor([0.5, 0.4, 0.375, 0.35, 0.325, 0.3, 0.275, 0.25, 0.225])
     thresholds = torch.tensor([0.55, 0.54, 0.53, 0.52, 0.51, 0.5, 0.49, 0.48, 0.47])
 
-    car_cab_problem = CarCabDesign()
-    get_util = PiecewiseLinear(beta1=beta1, beta2=beta2, thresholds=thresholds)
+    car_cab = CarCabDesign()
+    utility_func = PiecewiseLinear(beta1=beta1, beta2=beta2, thresholds=thresholds)
 
-    return get_util(car_cab_problem(X))
+    return utility_func(car_cab(X))
+
+
+class NegativeVehicleSafety(VehicleSafety):
+    def evaluate_true(self, X: Tensor) -> Tensor:
+        f = -super().evaluate_true(X)
+        Y_bounds = torch.tensor(
+            [
+                [-1.7040e03, -1.1708e01, -2.6192e-01],
+                [-1.6619e03, -6.2136e00, -4.2879e-02],
+            ]
+        ).to(X)
+        f = (f - Y_bounds[0, :]) / (Y_bounds[1, :] - Y_bounds[0, :])
+        return f
+
+
+def vehicle_safety_obj_func(X: Tensor) -> Tensor:
+    beta1 = torch.tensor([2, 6, 8])
+    beta2 = torch.tensor([1, 2, 2])
+    thresholds = torch.tensor([0.5, 0.8, 0.8])
+
+    vehicle_safety = NegativeVehicleSafety()
+    utility_func = PiecewiseLinear(beta1=beta1, beta2=beta2, thresholds=thresholds)
+
+    return utility_func(vehicle_safety(X))
