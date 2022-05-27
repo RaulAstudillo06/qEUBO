@@ -227,7 +227,7 @@ class PairwiseKernelVariationalGP(Model):
         self.aux_model = aux_model
 
     def posterior(self, X: Tensor, posterior_transform=None) -> MultivariateNormal:
-        X0 = torch.zeros(size=X.shape, requires_grad=False)
+        X0 = torch.zeros(size=X.shape, requires_grad=False) + 0.5
         X_aug = torch.cat([X, X0], dim=-1)
         return self.aux_model.posterior(X_aug)
 
