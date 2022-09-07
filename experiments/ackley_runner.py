@@ -40,7 +40,7 @@ algo = "EMOV"
 
 # estimate noise level
 comp_noise_type = "logit"
-noise_level_id = 1
+noise_level_id = 2
 
 if False:
     noise_level = get_noise_level(
