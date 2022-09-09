@@ -47,9 +47,9 @@ def pbo_trial(
     num_max_iter: int,
     trial: int,
     restart: bool,
-    ignore_failures: bool = False,
-    model_type: str = "pairwise_gp",
-    add_baseline_point=False,
+    model_type: str,
+    add_baseline_point: bool,
+    ignore_failures: bool,
     algo_params: Optional[Dict] = None,
 ) -> None:
 

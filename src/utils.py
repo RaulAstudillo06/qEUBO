@@ -1,5 +1,6 @@
 from typing import Optional
 
+import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
@@ -89,13 +90,18 @@ def generate_queries_against_baseline(
     num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
 ):
     # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
-    random_points = generate_random_queries(
-        10 * (2 ** input_dim), 1, input_dim, seed + 1
+    random_queries = generate_random_queries(
+        num_queries=5 * (2 ** input_dim),
+        batch_size=batch_size,
+        input_dim=input_dim,
+        seed=seed + 1,
     )
-    obj_vals = get_obj_vals(random_points, obj_func).squeeze(-1)
-    best_point = random_points[torch.argmax(obj_vals), ...].unsqueeze(0)
-    queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
-    queries = torch.cat([best_point.expand_as(queries), queries], dim=1)
+    random_queries = 0.1 * random_queries + 0.45
+    obj_vals = get_obj_vals(random_queries, obj_func)
+    argmax_obj_vals = np.unravel_index(np.argmax(obj_vals), obj_vals.shape)
+    best_point = random_queries[argmax_obj_vals[0], argmax_obj_vals[1], :]
+    random_queries = random_queries[:, [argmax_obj_vals[1] - 1], :]
+    queries = torch.cat([best_point.expand_as(random_queries), random_queries], dim=1)
     return queries
 
 
@@ -187,11 +193,11 @@ def optimize_acqf_and_get_suggested_query(
 
     candidates = candidates.detach()
     acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
-    print("Acquisition values:")
-    print(acq_values_sorted)
-    print("Candidates:")
-    print(candidates[indices].squeeze())
-    print(candidates.squeeze())
+    # print("Acquisition values:")
+    # print(acq_values_sorted)
+    # print("Candidates:")
+    # print(candidates[indices].squeeze())
+    # print(candidates.squeeze())
     new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
     return new_x
 

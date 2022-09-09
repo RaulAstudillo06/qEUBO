@@ -19,8 +19,10 @@ def experiment_manager(
     first_trial: int,
     last_trial: int,
     restart: bool,
-    algo_params: Optional[Dict] = None,
+    model_type: str = "pairwise_gp",
+    add_baseline_point: bool = True,
     ignore_failures: bool = False,
+    algo_params: Optional[Dict] = None,
 ) -> None:
 
     for trial in range(first_trial, last_trial + 1):
@@ -37,5 +39,7 @@ def experiment_manager(
             num_max_iter=num_max_iter,
             trial=trial,
             restart=restart,
+            model_type=model_type,
+            add_baseline_point=add_baseline_point,
             ignore_failures=ignore_failures,
         )
