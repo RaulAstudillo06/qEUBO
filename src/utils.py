@@ -96,10 +96,12 @@ def generate_queries_against_baseline(
         input_dim=input_dim,
         seed=seed + 1,
     )
-    random_queries = 0.1 * random_queries + 0.45
+    random_queries = 0.1 * random_queries + 0.2
     obj_vals = get_obj_vals(random_queries, obj_func)
     argmax_obj_vals = np.unravel_index(np.argmax(obj_vals), obj_vals.shape)
-    best_point = random_queries[argmax_obj_vals[0], argmax_obj_vals[1], :]
+    best_point = torch.tensor(
+        [0.3] * input_dim
+    )  # random_queries[argmax_obj_vals[0], argmax_obj_vals[1], :]
     random_queries = random_queries[:, [argmax_obj_vals[1] - 1], :]
     queries = torch.cat([best_point.expand_as(random_queries), random_queries], dim=1)
     return queries
