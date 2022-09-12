@@ -19,11 +19,11 @@ from src.get_noise_level import get_noise_level
 
 
 # Objective function
-input_dim = 5
+input_dim = 6
 
 
 def obj_func(X: Tensor) -> Tensor:
-    X_unnorm = 20 * X - 10.0
+    X_unnorm = 20.0 * X - 10.0
     objective_X = -torch.abs(X_unnorm * torch.sin(X_unnorm) + 0.1 * X_unnorm).sum(
         dim=-1
     )
@@ -32,8 +32,8 @@ def obj_func(X: Tensor) -> Tensor:
 
 # Algos
 # algo = "Random"
-algo = "EMOV"
-# algo = "EI"
+# algo = "EMOV"
+algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
@@ -55,10 +55,10 @@ if False:
 
 if comp_noise_type == "probit":
     # noise_levels = []
-    noise_level = 0.3456
+    noise_level = 0.5721  # 0.3456
 elif comp_noise_type == "logit":
     # noise_levels = []
-    noise_level = 0.2885
+    noise_level = 0.4842  # 0.2885
 
 # noise_level = noise_levels[noise_level_id - 1]
 
