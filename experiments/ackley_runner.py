@@ -20,7 +20,7 @@ from src.get_noise_level import get_noise_level
 
 
 # Objective function
-input_dim = 5
+input_dim = 4
 
 
 def obj_func(X: Tensor) -> Tensor:
@@ -32,14 +32,14 @@ def obj_func(X: Tensor) -> Tensor:
 
 # Algos
 # algo = "Random"
-algo = "EMOV"
+algo = "EI"
 # algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
 
 # estimate noise level
-comp_noise_type = "logit"
+comp_noise_type = "probit"
 noise_level_id = 2
 
 if False:
@@ -54,11 +54,13 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_levels = [0.0760, 0.1872, 0.3817]
+    # noise_levels = [0.0760, 0.1872, 0.3817]
+    noise_level = 0.2184
 elif comp_noise_type == "logit":
-    noise_levels = [0.0621, 0.1574, 0.3295]
+    # noise_levels = [0.0621, 0.1574, 0.3295]
+    noise_level = 0.1841
 
-noise_level = noise_levels[noise_level_id - 1]
+# noise_level = noise_levels[noise_level_id - 1]
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -80,5 +82,5 @@ experiment_manager(
     num_max_iter=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=True,
+    restart=False,
 )
