@@ -20,7 +20,7 @@ from src.get_noise_level import get_noise_level
 
 
 # Objective function
-input_dim = 4
+input_dim = 6
 
 
 def obj_func(X: Tensor) -> Tensor:
@@ -55,10 +55,10 @@ if False:
 
 if comp_noise_type == "probit":
     # noise_levels = [0.0760, 0.1872, 0.3817]
-    noise_level = 0.2184
+    noise_level = 0.1696
 elif comp_noise_type == "logit":
     # noise_levels = [0.0621, 0.1574, 0.3295]
-    noise_level = 0.1841
+    noise_level = 0.1416
 
 # noise_level = noise_levels[noise_level_id - 1]
 
