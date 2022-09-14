@@ -68,7 +68,7 @@ elif len(sys.argv) == 2:
     last_trial = int(sys.argv[1])
 
 experiment_manager(
-    problem="vehicle safety",
+    problem="vsafety",
     obj_func=obj_func,
     input_dim=input_dim,
     comp_noise_type=comp_noise_type,
