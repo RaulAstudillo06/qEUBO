@@ -64,7 +64,7 @@ def generate_initial_data(
     queries = generate_random_queries(num_queries, batch_size, input_dim, seed)
     if add_baseline_point:
         queries_against_baseline = generate_queries_against_baseline(
-            num_queries, batch_size, input_dim, obj_func, seed
+            100, batch_size, input_dim, obj_func, seed
         )
         queries = torch.cat([queries, queries_against_baseline], dim=0)
     obj_vals = get_obj_vals(queries, obj_func)
@@ -87,6 +87,20 @@ def generate_random_queries(
 
 
 def generate_queries_against_baseline(
+    num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
+):
+    # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
+    # random_points = generate_random_queries(10 * (2 ** input_dim), 1, input_dim, seed + 1)
+    # obj_vals = get_obj_vals(random_points, obj_func).squeeze(-1)
+    best_point = torch.tensor(
+        [0.49] * input_dim
+    )  # random_points[torch.argmax(obj_vals), ...].unsqueeze(0)
+    queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
+    queries = torch.cat([best_point.expand_as(queries), queries], dim=1)
+    return queries
+
+
+def generate_queries_against_baseline2(
     num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
 ):
     # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
