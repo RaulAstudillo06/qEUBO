@@ -93,10 +93,11 @@ def generate_queries_against_baseline(
     # random_points = generate_random_queries(10 * (2 ** input_dim), 1, input_dim, seed + 1)
     # obj_vals = get_obj_vals(random_points, obj_func).squeeze(-1)
     best_point = torch.tensor(
-        [0.49] * input_dim
+        [0.52] * input_dim
     )  # random_points[torch.argmax(obj_vals), ...].unsqueeze(0)
     queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
     queries = torch.cat([best_point.expand_as(queries), queries], dim=1)
+    # print(obj_func(queries))
     return queries
 
 
