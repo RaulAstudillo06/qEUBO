@@ -39,7 +39,7 @@ algo = "EI"
 # algo = "PKG"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -54,13 +54,11 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    # noise_levels = [0.0760, 0.1872, 0.3817]
-    noise_level = 0.1696
+    noise_levels = [0.0682, 0.1696, 0.3444]
 elif comp_noise_type == "logit":
-    # noise_levels = [0.0621, 0.1574, 0.3295]
-    noise_level = 0.1416
+    noise_levels = [0.0575, 0.1416, 0.2943]
 
-# noise_level = noise_levels[noise_level_id - 1]
+noise_level = noise_levels[noise_level_id - 1]
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -79,7 +77,7 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=2 * (input_dim + 1),
-    num_max_iter=200,
+    num_max_iter=300,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,
