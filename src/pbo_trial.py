@@ -44,7 +44,7 @@ def pbo_trial(
     algo: str,
     batch_size: int,
     num_init_queries: int,
-    num_max_iter: int,
+    num_algo_queries: int,
     trial: int,
     restart: bool,
     model_type: str,
@@ -53,7 +53,7 @@ def pbo_trial(
     algo_params: Optional[Dict] = None,
 ) -> None:
 
-    algo_id = algo
+    algo_id = algo + "_" + str(batch_size)
 
     # Get script directory
     script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -196,7 +196,7 @@ def pbo_trial(
 
         iteration = 0
 
-    while iteration < num_max_iter:
+    while iteration < num_algo_queries:
         iteration += 1
         print("Problem: " + problem)
         print("Sampling policy: " + algo_id)
@@ -306,8 +306,8 @@ def get_new_suggested_query(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = 4 * input_dim
-    raw_samples = 120 * input_dim
+    num_restarts = 2 * input_dim * batch_size
+    raw_samples = 60 * input_dim * batch_size
     batch_initial_conditions = None
 
     if algo == "Random":
@@ -331,7 +331,7 @@ def get_new_suggested_query(
         )
     elif algo == "EI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        if model_type == "pairwise_gp":
+        if model_type == "pairwise_gp" or model_type == "top_choice_gp":
             X_baseline = model.datapoints.clone()
         elif model_type == "pairwise_kernel_variational_gp":
             X_baseline = model.queries.clone()
@@ -348,7 +348,7 @@ def get_new_suggested_query(
         )
     elif algo == "NEI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        if model_type == "pairwise_gp":
+        if model_type == "pairwise_gp" or model_type == "top_choice_gp":
             X_baseline = model.datapoints.clone()
         elif model_type == "pairwise_kernel_variational_gp":
             X_baseline = model.queries.clone()
@@ -387,8 +387,8 @@ def compute_obj_val_at_max_post_mean(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = 4 * input_dim
-    raw_samples = 120 * input_dim
+    num_restarts = 8 * input_dim
+    raw_samples = 240 * input_dim
 
     post_mean_func = PosteriorMean(model=model)
     max_post_mean_func = optimize_acqf_and_get_suggested_query(

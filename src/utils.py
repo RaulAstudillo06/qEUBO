@@ -15,6 +15,10 @@ from src.models.likelihoods.pairwise import (
 )
 from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.top_choice_gp import (
+    TopChoiceGP,
+    TopChoiceLaplaceMarginalLogLikelihood,
+)
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
 from torch.distributions import Bernoulli, Normal, Gumbel
@@ -46,6 +50,11 @@ def fit_model(
         model = model.to(device=queries.device, dtype=queries.dtype)
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
+    elif model_type == "top_choice_gp":
+        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
+        model = TopChoiceGP(datapoints=datapoints, choices=comparisons)
+        mll = TopChoiceLaplaceMarginalLogLikelihood(model.likelihood, model)
+        mll = fit_gpytorch_model(mll)
     return model
 
 
@@ -167,12 +176,12 @@ def training_data_for_pairwise_gp(queries, responses):
     comparisons = []
     for i in range(num_queries):
         best_item_id = batch_size * i + responses[i]
+        comparison = [best_item_id]
         for j in range(batch_size):
             datapoints.append(queries[i, j, :].unsqueeze(0))
             if j != responses[i]:
-                comparisons.append(
-                    torch.tensor([best_item_id, batch_size * i + j]).unsqueeze(0)
-                )
+                comparison.append(batch_size * i + j)
+        comparisons.append(torch.tensor(comparison).unsqueeze(0))
 
     datapoints = torch.cat(datapoints, dim=0)
     comparisons = torch.cat(comparisons, dim=0)
@@ -186,8 +195,8 @@ def optimize_acqf_and_get_suggested_query(
     num_restarts: int,
     raw_samples: int,
     batch_initial_conditions: Optional[Tensor] = None,
-    batch_limit: Optional[int] = 4,
-    init_batch_limit: Optional[int] = 20,
+    batch_limit: Optional[int] = 2,
+    init_batch_limit: Optional[int] = 30,
 ) -> Tensor:
     """Optimizes the acquisition function, and returns the candidate solution."""
 

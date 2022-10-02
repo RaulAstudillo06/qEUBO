@@ -38,7 +38,7 @@ algo = "EI"
 # algo = "PKG"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -65,6 +65,10 @@ elif len(sys.argv) == 2:
     first_trial = int(sys.argv[1])
     last_trial = int(sys.argv[1])
 
+batch_size = 2
+NUM_ALGO_POINTS = 480
+NUM_INIT_POINTS = 6 * input_dim
+
 experiment_manager(
     problem="sushi",
     obj_func=obj_func,
@@ -72,9 +76,9 @@ experiment_manager(
     comp_noise_type=comp_noise_type,
     comp_noise=noise_level,
     algo=algo,
-    batch_size=2,
-    num_init_queries=2 * (input_dim + 1),
-    num_max_iter=100,
+    batch_size=batch_size,
+    num_init_queries=int(NUM_INIT_POINTS / batch_size),
+    num_algo_queries=int(NUM_ALGO_POINTS / batch_size),
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,
