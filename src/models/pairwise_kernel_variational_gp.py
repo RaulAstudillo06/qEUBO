@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from re import T
 from copy import deepcopy
 from typing import Union
@@ -17,7 +15,8 @@ from gpytorch.means.constant_mean import ConstantMean
 from gpytorch.mlls.variational_elbo import VariationalELBO
 from gpytorch.models import ApproximateGP
 from gpytorch.priors.torch_priors import GammaPrior
-from gpytorch.utils.broadcasting import _mul_broadcast_shape
+
+# from gpytorch.utils.broadcasting import _mul_broadcast_shape
 from gpytorch.variational import CholeskyVariationalDistribution, VariationalStrategy
 from torch import Tensor
 
@@ -54,7 +53,7 @@ class PairwiseKernelVariationalGPAux(ApproximateGP, GPyTorchModel):
         self.covar_module = PairwiseKernel(
             latent_kernel=ScaleKernel(
                 RBFKernel(
-                    ard_num_dims=train_x.shape[-1] // 2, lengthscale_prior=ls_prior
+                    ard_num_dims=int(train_x.shape[-1] // 2), lengthscale_prior=ls_prior
                 ),
                 outputscale_prior=GammaPrior(2.0, 0.15),
             )
@@ -122,7 +121,7 @@ class PairwiseKernelVariationalGPAux(ApproximateGP, GPyTorchModel):
             f"Model batch shape ({model_batch_shape}) and target batch shape "
             f"({target_batch_shape}) are not broadcastable."
         )
-        _mul_broadcast_shape(model_batch_shape, target_batch_shape, error_msg=err_msg)
+        # _mul_broadcast_shape(model_batch_shape, target_batch_shape, error_msg=err_msg)
 
         if len(model_batch_shape) > len(input_batch_shape):
             input_batch_shape = model_batch_shape
