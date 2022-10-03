@@ -5,6 +5,7 @@ from copy import deepcopy
 
 from src.models.pairwise_gp import PairwiseGP
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.top_choice_gp import TopChoiceGP
 from src.utils import (
     optimize_acqf_and_get_suggested_query,
 )
@@ -33,7 +34,7 @@ def gen_thompson_sampling_query(model, batch_size, bounds, num_restarts, raw_sam
 
 def get_pairwise_gp_rff_sample(model, n_samples):
     model = model.eval()
-    if isinstance(model, PairwiseGP):
+    if isinstance(model, PairwiseGP) or isinstance(model, TopChoiceGP):
         # force the model to infer utility
         model.posterior(model.datapoints)
         modified_model = deepcopy(model)
