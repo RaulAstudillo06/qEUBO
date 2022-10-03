@@ -7,21 +7,21 @@ from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_model
 from botorch.optim.initializers import gen_batch_initial_conditions
 
-# from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
-from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
-from src.models.likelihoods.pairwise import (
+from botorch.models.likelihoods.pairwise import (
     PairwiseProbitLikelihood,
     PairwiseLogitLikelihood,
 )
-from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from botorch.optim.optimize import optimize_acqf
+from torch import Tensor
+from torch.distributions import Bernoulli, Normal, Gumbel
+
+from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.models.top_choice_gp import (
     TopChoiceGP,
     TopChoiceLaplaceMarginalLogLikelihood,
 )
-from botorch.optim.optimize import optimize_acqf
-from torch import Tensor
-from torch.distributions import Bernoulli, Normal, Gumbel
 
 
 def fit_model(
@@ -31,30 +31,31 @@ def fit_model(
     likelihood: Optional[str] = "logit",
 ):
     if model_type == "pairwise_gp":
-        if likelihood == "probit":
-            likelihood_func = PairwiseProbitLikelihood()
-        else:
-            likelihood_func = PairwiseLogitLikelihood()
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = PairwiseGP(
-            datapoints,
-            comparisons,
-            likelihood=likelihood_func,
-            jitter=1e-4,
-        )
 
-        mll = PairwiseLaplaceMarginalLogLikelihood(
-            likelihood=likelihood_func, model=model
-        )
+        if queries.shape[1] == 2:
+            if likelihood == "probit":
+                likelihood_func = PairwiseProbitLikelihood()
+            else:
+                likelihood_func = PairwiseLogitLikelihood()
+            model = PairwiseGP(
+                datapoints,
+                comparisons,
+                likelihood=likelihood_func,
+                jitter=1e-4,
+            )
+
+            mll = PairwiseLaplaceMarginalLogLikelihood(
+                likelihood=model.likelihood, model=model
+            )
+        else:
+            model = TopChoiceGP(datapoints=datapoints, choices=comparisons)
+            mll = TopChoiceLaplaceMarginalLogLikelihood(model.likelihood, model)
+
         fit_gpytorch_model(mll)
         model = model.to(device=queries.device, dtype=queries.dtype)
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
-    elif model_type == "top_choice_gp":
-        datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
-        model = TopChoiceGP(datapoints=datapoints, choices=comparisons)
-        mll = TopChoiceLaplaceMarginalLogLikelihood(model.likelihood, model)
-        mll = fit_gpytorch_model(mll)
     return model
 
 

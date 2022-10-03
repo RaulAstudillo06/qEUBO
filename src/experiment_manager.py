@@ -19,7 +19,7 @@ def experiment_manager(
     first_trial: int,
     last_trial: int,
     restart: bool,
-    model_type: str = "top_choice_gp",
+    model_type: str = "pairwise_gp",
     add_baseline_point: bool = False,
     ignore_failures: bool = False,
     algo_params: Optional[Dict] = None,

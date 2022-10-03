@@ -65,20 +65,16 @@ elif len(sys.argv) == 2:
     first_trial = int(sys.argv[1])
     last_trial = int(sys.argv[1])
 
-batch_size = 2
-NUM_ALGO_POINTS = 480
-NUM_INIT_POINTS = 6 * input_dim
-
 experiment_manager(
-    problem="sushi",
+    problem="sushi2",
     obj_func=obj_func,
     input_dim=input_dim,
     comp_noise_type=comp_noise_type,
     comp_noise=noise_level,
     algo=algo,
-    batch_size=batch_size,
-    num_init_queries=int(NUM_INIT_POINTS / batch_size),
-    num_algo_queries=int(NUM_ALGO_POINTS / batch_size),
+    batch_size=2,
+    num_init_queries=5 * input_dim,
+    num_algo_queries=250,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,
