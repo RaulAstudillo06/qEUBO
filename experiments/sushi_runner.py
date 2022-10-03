@@ -66,14 +66,14 @@ elif len(sys.argv) == 2:
     last_trial = int(sys.argv[1])
 
 experiment_manager(
-    problem="sushi2",
+    problem="sushi",
     obj_func=obj_func,
     input_dim=input_dim,
     comp_noise_type=comp_noise_type,
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=5 * input_dim,
+    num_init_queries=4 * input_dim,
     num_algo_queries=250,
     first_trial=first_trial,
     last_trial=last_trial,
