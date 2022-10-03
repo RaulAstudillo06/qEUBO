@@ -331,7 +331,7 @@ def get_new_suggested_query(
         )
     elif algo == "EI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        if model_type == "pairwise_gp" or model_type == "top_choice_gp":
+        if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
         elif model_type == "pairwise_kernel_variational_gp":
             X_baseline = model.queries.clone()
@@ -348,7 +348,7 @@ def get_new_suggested_query(
         )
     elif algo == "NEI":
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
-        if model_type == "pairwise_gp" or model_type == "top_choice_gp":
+        if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
         elif model_type == "pairwise_kernel_variational_gp":
             X_baseline = model.queries.clone()
