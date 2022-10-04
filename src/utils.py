@@ -12,11 +12,11 @@ from torch.distributions import Bernoulli, Normal, Gumbel
 
 
 from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
-from src.models.likelihoods.pairwise import (
+from botorch.models.likelihoods.pairwise import (
     PairwiseProbitLikelihood,
     PairwiseLogitLikelihood,
 )
-from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
+from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.models.top_choice_gp import (
     TopChoiceGP,
