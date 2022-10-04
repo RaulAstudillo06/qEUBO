@@ -6,16 +6,16 @@ from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_model
 from botorch.optim.initializers import gen_batch_initial_conditions
-
-from botorch.models.likelihoods.pairwise import (
-    PairwiseProbitLikelihood,
-    PairwiseLogitLikelihood,
-)
 from botorch.optim.optimize import optimize_acqf
 from torch import Tensor
 from torch.distributions import Bernoulli, Normal, Gumbel
 
+
 from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
+from src.models.likelihoods.pairwise import (
+    PairwiseProbitLikelihood,
+    PairwiseLogitLikelihood,
+)
 from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.models.top_choice_gp import (

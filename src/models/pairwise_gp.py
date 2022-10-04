@@ -24,9 +24,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from botorch.acquisition.objective import PosteriorTransform
-from botorch.exceptions import UnsupportedError
-from botorch.models.likelihoods.pairwise import (
+
+# from botorch.acquisition.objective import PosteriorTransform
+from src.models.likelihoods.pairwise import (
     PairwiseLikelihood,
     PairwiseProbitLikelihood,
 )
@@ -35,18 +35,18 @@ from botorch.models.transforms.input import InputTransform
 from botorch.posteriors.gpytorch import GPyTorchPosterior
 from botorch.posteriors.posterior import Posterior
 from gpytorch import settings
-from gpytorch.constraints import GreaterThan
+from gpytorch.constraints import Positive
 from gpytorch.distributions.multivariate_normal import MultivariateNormal
 from gpytorch.kernels.rbf_kernel import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
+from gpytorch.lazy.lazy_tensor import LazyTensor
 from gpytorch.means.constant_mean import ConstantMean
 from gpytorch.mlls import MarginalLogLikelihood
 from gpytorch.models.gp import GP
 from gpytorch.module import Module
 from gpytorch.priors.smoothed_box_prior import SmoothedBoxPrior
 from gpytorch.priors.torch_priors import GammaPrior
-from linear_operator.operators import LinearOperator, RootLinearOperator
-from linear_operator.utils.cholesky import psd_safe_cholesky
+from gpytorch.utils.cholesky import psd_safe_cholesky
 from scipy import optimize
 from torch import float32, float64, Tensor
 from torch.nn.modules.module import _IncompatibleKeys
@@ -54,25 +54,13 @@ from torch.nn.modules.module import _IncompatibleKeys
 
 class PairwiseGP(Model, GP):
     r"""Probit GP for preference learning with Laplace approximation
-    A probit-likelihood GP that learns via pairwise comparison data, using a
-    Laplace approximation of the posterior of the estimated utility values. By
-    default it uses a scaled RBF kernel.
     Implementation is based on [Chu2005preference]_.
     Also see [Brochu2010tutorial]_ for additional reference.
     Note that in [Chu2005preference]_ the likelihood of a pairwise comparison
     is :math:`\left(\frac{f(x_1) - f(x_2)}{\sqrt{2}\sigma}\right)`, i.e. a scale is
     used in the denominator. To maintain consistency with usage of kernels
-    elsewhere in BoTorch, we instead do not include :math:`\sigma` in the code
+    elsewhere in botorch, we instead do not include :math:`\sigma` in the code
     (implicitly setting it to 1) and use ScaleKernel to scale the function.
-    In the example below, the user/decision maker has stated that they prefer
-    the first item over the second item and the third item over the second item,
-    generating comparisons [0, 1] and [2, 1].
-    Example:
-        >>> from botorch.models import PairwiseGP
-        >>> import torch
-        >>> datapoints = torch.Tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        >>> comparisons = torch.Tensor([[0, 1], [2, 1]])
-        >>> model = PairwiseGP(datapoints, comparisons)
     """
 
     _buffer_names = [
@@ -97,7 +85,8 @@ class PairwiseGP(Model, GP):
         input_transform: Optional[InputTransform] = None,
         **kwargs,
     ) -> None:
-        r"""
+        r"""A probit-likelihood GP with Laplace approximation model that learns via
+            pairwise comparison data. By default it uses a scaled RBF kernel.
         Args:
             datapoints: A `batch_shape x n x d` tensor of training features.
             comparisons: A `batch_shape x m x 2` training comparisons;
@@ -127,7 +116,6 @@ class PairwiseGP(Model, GP):
 
         self.train_inputs = []
         self.train_targets = None
-        self.utility = None
 
         self.pred_cov_fac_need_update = True
         self.dim = None
@@ -139,8 +127,8 @@ class PairwiseGP(Model, GP):
         self.set_train_data(datapoints, comparisons, update_model=False)
 
         # Set optional parameters
-        # Explicitly set jitter for numerical stability in psd_safe_cholesky
-        self._jitter = kwargs.get("jitter", 1e-5)
+        # jitter to add for numerical stability
+        self._jitter = kwargs.get("jitter", 1e-6)
         # Stopping creteria in scipy.optimize.fsolve used to find f_map in _update()
         # If None, set to 1e-6 by default in _update
         self._xtol = kwargs.get("xtol")
@@ -170,8 +158,8 @@ class PairwiseGP(Model, GP):
                     batch_shape=self.batch_shape,
                     ard_num_dims=self.dim,
                     lengthscale_prior=ls_prior,
-                    lengthscale_constraint=GreaterThan(
-                        lower_bound=1e-4, transform=None, initial_value=ls_prior_mode
+                    lengthscale_constraint=Positive(
+                        transform=None, initial_value=ls_prior_mode
                     ),
                 ),
                 outputscale_prior=SmoothedBoxPrior(a=1, b=4),
@@ -226,10 +214,10 @@ class PairwiseGP(Model, GP):
             or self.comparisons is None
         )
 
-    def _calc_covar(self, X1: Tensor, X2: Tensor) -> Union[Tensor, LinearOperator]:
+    def _calc_covar(self, X1: Tensor, X2: Tensor) -> Union[Tensor, LazyTensor]:
         r"""Calculate the covariance matrix given two sets of datapoints"""
         covar = self.covar_module(X1, X2)
-        return covar.to_dense()
+        return covar.evaluate()
 
     def _batch_chol_inv(self, mat_chol: Tensor) -> Tensor:
         r"""Wrapper to perform (batched) cholesky inverse"""
@@ -256,10 +244,10 @@ class PairwiseGP(Model, GP):
             datapoints: (Transformed) datapoints for finding f_max
         """
         self.covar = self._calc_covar(datapoints, datapoints)
-        self.covar_chol = psd_safe_cholesky(self.covar, jitter=self._jitter)
+        self.covar_chol = psd_safe_cholesky(self.covar)
         self.covar_inv = self._batch_chol_inv(self.covar_chol)
 
-    def _prior_mean(self, X: Tensor) -> Union[Tensor, LinearOperator]:
+    def _prior_mean(self, X: Tensor) -> Union[Tensor, LazyTensor]:
         r"""Return point prediction using prior only
         Args:
             X: A `batch_size x n' x d`-dim Tensor at which to evaluate prior
@@ -279,6 +267,31 @@ class PairwiseGP(Model, GP):
         pred_mean = self._prior_mean(X)
         pred_covar = self._calc_covar(X, X)
         return pred_mean, pred_covar
+
+    def _add_jitter(self, X: Tensor) -> Tensor:
+        jitter_prev = 0
+        Eye = torch.eye(X.size(-1), device=X.device, dtype=X.dtype).expand(X.shape)
+        for i in range(3):
+            jitter_new = self._jitter * (10 ** i)
+            X = X + (jitter_new - jitter_prev) * Eye
+            jitter_prev = jitter_new
+            # This may be VERY slow given upstream pytorch issue:
+            # https://github.com/pytorch/pytorch/issues/34272
+            try:
+                _ = torch.linalg.cholesky(X)
+                warnings.warn(
+                    "X is not a p.d. matrix; "
+                    f"Added jitter of {jitter_new:.2e} to the diagonal",
+                    RuntimeWarning,
+                )
+                return X
+            except RuntimeError:
+                continue
+        warnings.warn(
+            f"Failed to render X p.d. after adding {jitter_new:.2e} jitter",
+            RuntimeWarning,
+        )
+        return X
 
     def _grad_posterior_f(
         self,
@@ -462,13 +475,7 @@ class PairwiseGP(Model, GP):
         hlcov_eye_size = torch.Size((*self.likelihood_hess.shape[:-2], self.n, self.n))
         self.hlcov_eye = torch.empty(hlcov_eye_size)
 
-        # Take two newton step on the posterior MAP point to fill
-        # in gradients for pytorch. Using 2 instead of 1 since empirically sometimes
-        # the first step results in gradients in the order of 1e-7 while the 2nd step
-        # allows it go down further to the order of 1e-12 and stay there.
-        self.utility = self._util_newton_updates(
-            datapoints, f.clone().requires_grad_(True), max_iter=2
-        )
+        self.utility = f.clone().requires_grad_(True)
 
     def _transform_batch_shape(self, X: Tensor, X_new: Tensor) -> Tuple[Tensor, Tensor]:
         r"""Transform X and X_new into the same shape
@@ -528,11 +535,7 @@ class PairwiseGP(Model, GP):
             self.likelihood_hess = hl
             cov_hl = covar @ hl
             if eye is None:
-                eye = torch.diag_embed(
-                    torch.ones(
-                        cov_hl.shape[:-1], device=cov_hl.device, dtype=cov_hl.dtype
-                    )
-                )
+                eye = torch.diag_embed(torch.ones(cov_hl.shape[:-1]))
             cov_hl = cov_hl + eye  # add 1 to cov_hl
             g = self._grad_posterior_f(x, dp, D, DT, ch, ci)
             cov_g = covar @ g.unsqueeze(-1)
@@ -642,6 +645,7 @@ class PairwiseGP(Model, GP):
         self.dim = self.datapoints.shape[-1]  # feature dimensions
         self.n = self.datapoints.shape[-2]  # num datapoints
         self.m = self.comparisons.shape[-2]  # num pairwise comparisons
+        self.utility = None
         # D is batch_size x m x n or num_comparison x num_datapoints.
         # D_k_i is the s_k(x_i) value as in equation (6) in [Chu2005preference]_
         # D will usually be very sparse as well
@@ -665,46 +669,32 @@ class PairwiseGP(Model, GP):
         self.to(self.datapoints)
 
     def load_state_dict(
-        self, state_dict: Dict[str, Tensor], strict: bool = False
+        self, state_dict: Dict[str, Tensor], strict: Optional[bool] = False
     ) -> _IncompatibleKeys:
         r"""Removes data related buffers from the `state_dict` and calls
         `super().load_state_dict` with `strict=False`.
         Args:
             state_dict: The state dict.
-            strict: Boolean specifying whether or not given and instance-bound
-                state_dicts should have identical keys. Only implemented for
-                `strict=False` since buffers will filters out when calling
-                `_load_from_state_dict`.
+            strict: A boolean denoting whether to error out if all keys are not
+                present in the `state_dict`. Since we remove data related buffers
+                from the `state_dict`, this will lead to an error whenever
+                `strict=True`. Instead, we overwrite it with `strict=False`, and
+                raise a warning explaining this if `strict=True` is passed.
         Returns:
             A named tuple `_IncompatibleKeys`, containing the `missing_keys`
-            and `unexpected_keys`.
+            and `unexpected_keys`. Note that the buffers we remove from the
+            `state_dict` may be listed under `missing_keys`.
         """
         if strict:
-            raise UnsupportedError("Passing strict=True is not supported.")
-
+            warnings.warn(
+                f"Received `strict=True` in {self.__class__.__name__}.load_state_dict "
+                "call. This will be overwritten with `strict=False` after removing "
+                "a set of data related buffers from the `state_dict`.",
+                RuntimeWarning,
+            )
+        for key in self._buffer_names:
+            state_dict.pop(key, None)
         return super().load_state_dict(state_dict=state_dict, strict=False)
-
-    def _load_from_state_dict(
-        self,
-        state_dict: Dict[str, Tensor],
-        prefix: str,
-        local_metadata: Dict[str, Any],
-        strict: bool,
-        missing_keys: List[str],
-        unexpected_keys: List[str],
-        error_msgs: List[str],
-    ) -> None:
-        super()._load_from_state_dict(
-            state_dict={
-                k: v for k, v in state_dict.items() if k not in self._buffer_names
-            },
-            prefix=prefix,
-            local_metadata=local_metadata,
-            strict=False,
-            missing_keys=missing_keys,
-            unexpected_keys=unexpected_keys,
-            error_msgs=error_msgs,
-        )
 
     def forward(self, datapoints: Tensor) -> MultivariateNormal:
         r"""Calculate a posterior or prior prediction.
@@ -740,6 +730,12 @@ class PairwiseGP(Model, GP):
             # as we will be setting self.datapoints as the untransformed datapoints
             # self.transform_inputs will be called inside before calling _update()
             self.set_train_data(datapoints, self.comparisons, update_model=True)
+
+            # Take a newton step on the posterior MAP point to fill
+            # in gradients for pytorch
+            self.utility = self._util_newton_updates(
+                transformed_dp, self.utility, max_iter=1
+            )
 
             hl = self.likelihood_hess
             covar = self.covar
@@ -800,14 +796,27 @@ class PairwiseGP(Model, GP):
 
             output_mean, output_covar = pred_mean, pred_covar
 
-        post = MultivariateNormal(
-            mean=output_mean,
-            # output_covar is sometimes non-PSD
-            # perform a cholesky decomposition to check and amend
-            covariance_matrix=RootLinearOperator(
-                psd_safe_cholesky(output_covar, jitter=self._jitter)
-            ),
-        )
+        try:
+            if self.datapoints is None:
+                diag_jitter = torch.eye(output_covar.size(-1))
+            else:
+                diag_jitter = torch.eye(
+                    output_covar.size(-1),
+                    dtype=self.datapoints.dtype,
+                    device=self.datapoints.device,
+                )
+            diag_jitter = diag_jitter.expand(output_covar.shape)
+            diag_jitter = diag_jitter * self._jitter
+            # Preemptively adding jitter to diagonal to prevent the use of _add_jitter
+            # given that torch.cholesky may be very slow on non-pd matrix input
+            # See https://github.com/pytorch/pytorch/issues/34272
+            # TODO: remove this once torch.cholesky issue is resolved
+            output_covar = output_covar + diag_jitter
+            post = MultivariateNormal(output_mean, output_covar)
+        except RuntimeError:
+            output_covar = self._add_jitter(output_covar)
+            post = MultivariateNormal(output_mean, output_covar)
+
         return post
 
     # ============== botorch.models.model.Model interfaces ==============
@@ -816,7 +825,7 @@ class PairwiseGP(Model, GP):
         X: Tensor,
         output_indices: Optional[List[int]] = None,
         observation_noise: bool = False,
-        posterior_transform: Optional[PosteriorTransform] = None,
+        posterior_transform: Optional[Any] = None,
         **kwargs: Any,
     ) -> Posterior:
         r"""Computes the posterior over model outputs at the provided points.
@@ -891,6 +900,11 @@ class PairwiseGP(Model, GP):
             # TODO: be smart about how we can update covar matrix here
             new_model.set_train_data(new_datapoints, new_comparisons, update_model=True)
 
+            # Take a newton step on the posterior MAP point to fill in gradients for
+            # pytorch. This is essential for the conditioned model's gradient to work
+            new_model.utility = new_model._util_newton_updates(
+                new_datapoints, new_model.utility, max_iter=1
+            )
         return new_model
 
 
@@ -898,14 +912,6 @@ class PairwiseLaplaceMarginalLogLikelihood(MarginalLogLikelihood):
     r"""Laplace-approximated marginal log likelihood/evidence for PairwiseGP
     See (12) from [Chu2005preference]_.
     """
-
-    def __init__(self, likelihood, model: GP):
-        """
-        Args:
-            likelihood: Used as in args to GPyTorch MarginalLogLikelihood
-            model: Used as in args to GPyTorch MarginalLogLikelihood
-        """
-        super().__init__(likelihood, model)
 
     def forward(self, post: Posterior, comp: Tensor) -> Tensor:
         r"""Calculate approximated log evidence, i.e., log(P(D|theta))
@@ -934,9 +940,7 @@ class PairwiseLaplaceMarginalLogLikelihood(MarginalLogLikelihood):
         log_posterior = -log_posterior.clamp(min=0)
 
         mll = model.covar @ model.likelihood_hess
-        mll = mll + torch.diag_embed(
-            torch.ones(mll.shape[:-1], device=mll.device, dtype=mll.dtype)
-        )
+        mll = mll + torch.diag_embed(torch.ones(mll.shape[:-1]))
         mll = -0.5 * torch.logdet(mll)
 
         mll = mll + log_posterior
