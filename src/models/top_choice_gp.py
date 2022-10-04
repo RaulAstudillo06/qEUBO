@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from botorch.acquisition.objective import PosteriorTransform
+
 from botorch.exceptions import UnsupportedError
 from botorch.models.model import Model
 from botorch.models.transforms.input import InputTransform
@@ -21,9 +21,9 @@ from gpytorch.means.constant_mean import ConstantMean
 from gpytorch.mlls import MarginalLogLikelihood
 from gpytorch.models.gp import GP
 from gpytorch.module import Module
+from gpytorch.lazy.lazy_tensor import LazyTensor
 from gpytorch.priors.smoothed_box_prior import SmoothedBoxPrior
 from gpytorch.priors.torch_priors import GammaPrior
-from linear_operator.operators import LinearOperator, RootLinearOperator
 from linear_operator.utils.cholesky import psd_safe_cholesky
 from scipy import optimize
 from torch import float32, float64, Tensor
@@ -199,10 +199,10 @@ class TopChoiceGP(Model, GP):
             or self.choices is None
         )
 
-    def _calc_covar(self, X1: Tensor, X2: Tensor) -> Union[Tensor, LinearOperator]:
+    def _calc_covar(self, X1: Tensor, X2: Tensor) -> Union[Tensor, LazyTensor]:
         r"""Calculate the covariance matrix given two sets of datapoints"""
         covar = self.covar_module(X1, X2)
-        return covar.to_dense()
+        return covar.evaluate()
 
     def _batch_chol_inv(self, mat_chol: Tensor) -> Tensor:
         r"""Wrapper to perform (batched) cholesky inverse"""
@@ -234,7 +234,7 @@ class TopChoiceGP(Model, GP):
         self.covar_chol = psd_safe_cholesky(self.covar, jitter=self._jitter)
         self.covar_inv = self._batch_chol_inv(self.covar_chol)
 
-    def _prior_mean(self, X: Tensor) -> Union[Tensor, LinearOperator]:
+    def _prior_mean(self, X: Tensor) -> Union[Tensor, LazyTensor]:
         r"""Return point prediction using prior only
 
         Args:
@@ -801,14 +801,26 @@ class TopChoiceGP(Model, GP):
 
             output_mean, output_covar = pred_mean, pred_covar
 
-        post = MultivariateNormal(
-            mean=output_mean,
-            # output_covar is sometimes non-PSD
-            # perform a cholesky decomposition to check and amend
-            covariance_matrix=RootLinearOperator(
-                psd_safe_cholesky(output_covar, jitter=self._jitter)
-            ),
-        )
+        try:
+            if self.datapoints is None:
+                diag_jitter = torch.eye(output_covar.size(-1))
+            else:
+                diag_jitter = torch.eye(
+                    output_covar.size(-1),
+                    dtype=self.datapoints.dtype,
+                    device=self.datapoints.device,
+                )
+            diag_jitter = diag_jitter.expand(output_covar.shape)
+            diag_jitter = diag_jitter * self._jitter
+            # Preemptively adding jitter to diagonal to prevent the use of _add_jitter
+            # given that torch.cholesky may be very slow on non-pd matrix input
+            # See https://github.com/pytorch/pytorch/issues/34272
+            # TODO: remove this once torch.cholesky issue is resolved
+            output_covar = output_covar + diag_jitter
+            post = MultivariateNormal(output_mean, output_covar)
+        except RuntimeError:
+            output_covar = self._add_jitter(output_covar)
+            post = MultivariateNormal(output_mean, output_covar)
         return post
 
     # ============== botorch.models.model.Model interfaces ==============
@@ -817,7 +829,6 @@ class TopChoiceGP(Model, GP):
         X: Tensor,
         output_indices: Optional[List[int]] = None,
         observation_noise: bool = False,
-        posterior_transform: Optional[PosteriorTransform] = None,
         **kwargs: Any,
     ) -> Posterior:
         r"""Computes the posterior over model outputs at the provided points.
@@ -843,11 +854,7 @@ class TopChoiceGP(Model, GP):
             )
 
         post = self(X)
-        posterior = GPyTorchPosterior(post)
-        if posterior_transform is not None:
-            return posterior_transform(posterior)
-        else:
-            return posterior
+        return GPyTorchPosterior(post)
 
     def condition_on_observations(self, X: Tensor, Y: Tensor, **kwargs: Any) -> Model:
         r"""Condition the model on new observations.
