@@ -192,9 +192,7 @@ class PairwiseKernelVariationalGPAux(ApproximateGP, GPyTorchModel):
 
 class PairwiseKernelVariationalGP(Model):
     def __init__(
-        self,
-        queries: Tensor,
-        responses: Tensor,
+        self, queries: Tensor, responses: Tensor, fit_aux_model_flag: bool = True
     ) -> None:
         super().__init__()
         self.queries = queries
@@ -205,25 +203,30 @@ class PairwiseKernelVariationalGP(Model):
         self.input_dim = queries.shape[-1]
         train_x = queries.flatten(start_dim=-2, end_dim=-1)
         train_y = 1.0 - responses.squeeze(-1)
+        self.num_data = train_y.numel()
         bounds = torch.tensor(
             [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
         ).T
         bounds_aug = torch.cat((bounds, bounds), dim=1)
         inducing_points = draw_sobol_samples(
-            bounds=bounds_aug, n=2 ** (self.input_dim + 2), q=1
+            bounds=bounds_aug, n=2 ** (self.input_dim + 2), q=1, seed=0
         ).squeeze(1)
         inducing_points = torch.cat([inducing_points, train_x], dim=0)
         scales = bounds[1, :] - bounds[0, :]
         aux_model = PairwiseKernelVariationalGPAux(
             train_x, train_y, inducing_points, scales
         )
+        self.aux_model = aux_model
+        if fit_aux_model_flag:
+            self.fit_aux_model()
+
+    def fit_aux_model(self) -> None:
         mll = VariationalELBO(
-            likelihood=aux_model.likelihood,
-            model=aux_model,
-            num_data=train_y.numel(),
+            likelihood=self.aux_model.likelihood,
+            model=self.aux_model,
+            num_data=self.num_data,
         )
         mll = fit_gpytorch_model(mll)
-        self.aux_model = aux_model
 
     def posterior(self, X: Tensor, posterior_transform=None) -> MultivariateNormal:
         X0 = torch.zeros(size=X.shape, requires_grad=False) + 0.5
