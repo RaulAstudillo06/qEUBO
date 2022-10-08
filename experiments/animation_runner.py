@@ -28,33 +28,42 @@ input_dim = 5
 datapoints = torch.tensor(np.loadtxt(data_folder + "datapoints_norm.txt"))
 comparisons = torch.tensor(np.loadtxt(data_folder + "responses.txt"))
 likelihood_func = PairwiseLogitLikelihood()
-model = PairwiseGP(
+aux_model = PairwiseGP(
     datapoints,
     comparisons,
     likelihood=likelihood_func,
     jitter=1e-4,
 )
 animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict")
-model.load_state_dict(animation_surrogate_state_dict)
-model(datapoints)
-model.eval()
+aux_model.load_state_dict(animation_surrogate_state_dict)
+aux_model(datapoints)
+aux_model.eval()
+
+N = 10000
 
 
 def obj_func(X: Tensor) -> Tensor:
-    objective_X = model(X).mean.detach()
+    if X.shape[0] > N:
+        n_batches = int(X.shape[0] / N)
+        objective_X = []
+        for i in range(n_batches):
+            objective_X.append(aux_model(X[i * N : (i + 1) * N, ...]).mean.detach())
+        objective_X = torch.cat(objective_X, dim=0)
+    else:
+        objective_X = aux_model(X).mean.detach()
     return objective_X
 
 
 # Algos
 # algo = "Random"
-algo = "EMOV"
-# algo = "EI"
+# algo = "EMOV"
+algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -63,15 +72,15 @@ if False:
         input_dim,
         target_error=0.1 * float(noise_level_id),
         top_proportion=0.01,
-        num_samples=10000,
+        num_samples=100000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 0.0544
+    noise_level = 0.0466
 elif comp_noise_type == "logit":
-    noise_level = 0.0461
+    noise_level = 0.0383
 
 # Run experiment
 if len(sys.argv) == 3:
