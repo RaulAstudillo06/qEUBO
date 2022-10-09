@@ -35,7 +35,7 @@ from botorch.models.transforms.input import InputTransform
 from botorch.posteriors.gpytorch import GPyTorchPosterior
 from botorch.posteriors.posterior import Posterior
 from gpytorch import settings
-from gpytorch.constraints import Positive
+from gpytorch.constraints import GreaterThan
 from gpytorch.distributions.multivariate_normal import MultivariateNormal
 from gpytorch.kernels.rbf_kernel import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
@@ -158,8 +158,8 @@ class PairwiseGP(Model, GP):
                     batch_shape=self.batch_shape,
                     ard_num_dims=self.dim,
                     lengthscale_prior=ls_prior,
-                    lengthscale_constraint=Positive(
-                        transform=None, initial_value=ls_prior_mode
+                    lengthscale_constraint=GreaterThan(
+                        lower_bound=1e-5, transform=None, initial_value=ls_prior_mode
                     ),
                 ),
                 outputscale_prior=SmoothedBoxPrior(a=1, b=4),
