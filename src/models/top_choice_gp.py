@@ -1,3 +1,17 @@
+r"""
+Preference Learning with Gaussian Process
+
+.. [Chu2005preference]
+    Wei Chu, and Zoubin Ghahramani. Preference learning with Gaussian processes.
+    Proceedings of the 22nd international conference on Machine learning. 2005.
+
+.. [Brochu2010tutorial]
+    Eric Brochu, Vlad M. Cora, and Nando De Freitas.
+    A tutorial on Bayesian optimization of expensive cost functions,
+    with application to active user modeling and hierarchical reinforcement learning.
+    arXiv preprint arXiv:1012.2599 (2010).
+"""
+
 from __future__ import annotations
 
 import warnings
@@ -6,7 +20,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-
 from botorch.exceptions import UnsupportedError
 from botorch.models.model import Model
 from botorch.models.transforms.input import InputTransform
@@ -147,7 +160,10 @@ class TopChoiceGP(Model, GP):
                         lower_bound=1e-4, transform=None, initial_value=ls_prior_mode
                     ),
                 ),
-                outputscale_prior=SmoothedBoxPrior(a=1, b=4),
+                outputscale_prior=SmoothedBoxPrior(a=0.2, b=5),
+                outputscale_constraint=GreaterThan(
+                    lower_bound=1e-4, transform=None, initial_value=1
+                ),
             )
 
         self.covar_module = covar_module
@@ -191,6 +207,13 @@ class TopChoiceGP(Model, GP):
             self.__deepcopy__ = dcp
             return new_model
 
+    def _scaled_psd_safe_cholesky(self, M: Tensor, jitter=None):
+        scale = self.covar_module.outputscale.unsqueeze(-1).unsqueeze(-1)
+        M = M / scale
+        chol = psd_safe_cholesky(M)
+        chol = chol * scale.sqrt()
+        return chol
+
     def _has_no_data(self):
         r"""Return true if the model does not have both datapoints and choices"""
         return (
@@ -231,7 +254,9 @@ class TopChoiceGP(Model, GP):
             datapoints: (Transformed) datapoints for finding f_max
         """
         self.covar = self._calc_covar(datapoints, datapoints)
-        self.covar_chol = psd_safe_cholesky(self.covar, jitter=self._jitter)
+        self.covar_chol = self._scaled_psd_safe_cholesky(
+            self.covar, jitter=self._jitter
+        )
         self.covar_inv = self._batch_chol_inv(self.covar_chol)
 
     def _prior_mean(self, X: Tensor) -> Union[Tensor, LazyTensor]:
@@ -263,6 +288,7 @@ class TopChoiceGP(Model, GP):
         self,
         utility: Union[Tensor, np.ndarray],
         datapoints: Tensor,
+        choices: Tensor,
         D: Tensor,
         DT: Tensor,
         covar_chol: Tensor,
@@ -290,7 +316,7 @@ class TopChoiceGP(Model, GP):
             utility = torch.tensor(utility, dtype=self.datapoints.dtype)
             prior_mean = prior_mean.cpu()
 
-        b = self.likelihood.negative_log_gradient_sum(utility=utility, D=D)
+        b = self.likelihood.negative_log_gradient_sum(utility=utility, choices=choices)
 
         # g_ = covar_inv x (utility - pred_prior)
         p = (utility - prior_mean).unsqueeze(-1).to(covar_chol)
@@ -306,6 +332,7 @@ class TopChoiceGP(Model, GP):
         self,
         utility: Union[Tensor, np.ndarray],
         datapoints: Tensor,
+        choices: Tensor,
         D: Tensor,
         DT: Tensor,
         covar_chol: Tensor,
@@ -330,7 +357,7 @@ class TopChoiceGP(Model, GP):
         if ret_np:
             utility = torch.tensor(utility, dtype=self.datapoints.dtype)
 
-        hl = self.likelihood.negative_log_hessian_sum(utility=utility, D=D)
+        hl = self.likelihood.negative_log_hessian_sum(utility=utility, choices=choices)
         hess = hl + covar_inv
         return hess.numpy() if ret_np else hess
 
@@ -383,7 +410,11 @@ class TopChoiceGP(Model, GP):
             # warm start
             init_x0_size = self.batch_shape + torch.Size([self.n])
             if self._x0 is None or torch.Size(self._x0.shape) != init_x0_size:
-                x0 = np.random.rand(*init_x0_size)
+                rt_outputscale = (
+                    self.covar_module.outputscale.sqrt().unsqueeze(-1).detach().numpy()
+                )
+                # initialize x0 to be on roughly the right scale
+                x0 = np.random.standard_normal(init_x0_size) * rt_outputscale
             else:
                 x0 = self._x0
 
@@ -392,13 +423,22 @@ class TopChoiceGP(Model, GP):
                 # TODO: enable vectorization/parallelization here
                 x0 = x0.reshape(-1, self.n)
                 dp_v = datapoints.view(-1, self.n, self.dim).cpu()
+                choices_v = self.choices.view(-1, self.n, self.k_choice).cpu()
                 D_v = self.D.view(-1, self.m, self.n).cpu()
                 DT_v = self.DT.view(-1, self.n, self.m).cpu()
                 ch_v = self.covar_chol.view(-1, self.n, self.n).cpu()
                 ci_v = self.covar_inv.view(-1, self.n, self.n).cpu()
                 x = np.empty(x0.shape)
                 for i in range(x0.shape[0]):
-                    fsolve_args = (dp_v[i], D_v[i], DT_v[i], ch_v[i], ci_v[i], True)
+                    fsolve_args = (
+                        dp_v[i],
+                        choices_v[i],
+                        D_v[i],
+                        DT_v[i],
+                        ch_v[i],
+                        ci_v[i],
+                        True,
+                    )
                     with warnings.catch_warnings():
                         warnings.filterwarnings("ignore", category=RuntimeWarning)
                         x[i] = optimize.fsolve(
@@ -415,6 +455,7 @@ class TopChoiceGP(Model, GP):
                 # fsolve only works on CPU
                 fsolve_args = (
                     datapoints.cpu(),
+                    self.choices.cpu(),
                     self.D.cpu(),
                     self.DT.cpu(),
                     self.covar_chol.cpu(),
@@ -441,7 +482,7 @@ class TopChoiceGP(Model, GP):
         # self.likelihood_hess is updated here is for the rare case where we
         # do not want to call forward()
         self.likelihood_hess = self.likelihood.negative_log_hessian_sum(
-            utility=f, D=self.D
+            utility=f, choices=self.choices
         )
 
         # Lazy update hlcov_eye, which is used in calculating posterior during training
@@ -505,11 +546,12 @@ class TopChoiceGP(Model, GP):
                 finishing `max_iter` updates.
         """
         xtol = float("-Inf") if xtol is None else xtol
-        D, DT, ch, ci = (
+        D, DT, ch, ci, choices = (
             self.D,
             self.DT,
             self.covar_chol,
             self.covar_inv,
+            self.choices,
         )
         covar = self.covar
         diff = float("Inf")
@@ -517,7 +559,7 @@ class TopChoiceGP(Model, GP):
         x = x0
         eye = None
         while i < max_iter and diff > xtol:
-            hl = self.likelihood.negative_log_hessian_sum(utility=x, D=D)
+            hl = self.likelihood.negative_log_hessian_sum(utility=x, choices=choices)
             self.likelihood_hess = hl
             cov_hl = covar @ hl
             if eye is None:
@@ -527,7 +569,7 @@ class TopChoiceGP(Model, GP):
                     )
                 )
             cov_hl = cov_hl + eye  # add 1 to cov_hl
-            g = self._grad_posterior_f(x, dp, D, DT, ch, ci)
+            g = self._grad_posterior_f(x, dp, choices, D, DT, ch, ci)
             cov_g = covar @ g.unsqueeze(-1)
             x_update = torch.linalg.solve(cov_hl, cov_g).squeeze(-1)
             x_next = x - x_update
@@ -854,7 +896,8 @@ class TopChoiceGP(Model, GP):
             )
 
         post = self(X)
-        return GPyTorchPosterior(post)
+        posterior = GPyTorchPosterior(post)
+        return posterior
 
     def condition_on_observations(self, X: Tensor, Y: Tensor, **kwargs: Any) -> Model:
         r"""Condition the model on new observations.
