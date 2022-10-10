@@ -78,9 +78,9 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 0.0466
+    noise_level = 0.0
 elif comp_noise_type == "logit":
-    noise_level = 0.0383
+    noise_level = 0.0440
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -98,7 +98,7 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=4 * input_dim,
+    num_init_queries=5 * input_dim,
     num_algo_queries=250,
     first_trial=first_trial,
     last_trial=last_trial,
