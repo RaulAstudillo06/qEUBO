@@ -10,7 +10,7 @@ from botorch.settings import debug
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -29,7 +29,7 @@ datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
 comparisons = np.loadtxt(data_folder + "responses.txt")
 n_queries = comparisons.shape[0]
 
-K = RBF()
+K = RBF(length_scale=0.2)
 
 
 def my_kernel(x, y):
@@ -82,6 +82,7 @@ def obj_func(X: Tensor) -> Tensor:
         objective_X = torch.cat(objective_X, dim=0)
     else:
         objective_X = torch.tensor(aux_model.decision_function(X_aux.numpy()))
+    objective_X = 10 * objective_X
     return objective_X
 
 
@@ -103,7 +104,7 @@ if False:
         input_dim,
         target_error=0.1 * float(noise_level_id),
         top_proportion=0.01,
-        num_samples=100000,
+        num_samples=10000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
@@ -111,7 +112,7 @@ if False:
 if comp_noise_type == "probit":
     noise_level = 0.0
 elif comp_noise_type == "logit":
-    noise_level = 0.04066
+    noise_level = 0.3051
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -129,7 +130,7 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=4 * input_dim,
+    num_init_queries=5 * input_dim,
     num_algo_queries=250,
     first_trial=first_trial,
     last_trial=last_trial,
