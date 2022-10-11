@@ -1,4 +1,6 @@
 import numpy as np
+from sklearn import svm
+from sklearn.gaussian_process.kernels import RBF
 import os
 import sys
 import torch
@@ -8,56 +10,86 @@ from botorch.settings import debug
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
 project_path = script_dir[:-12]
 sys.path.append(project_path)
-data_folder = project_path + "/experiments/animation_data/"
+data_folder = project_path + "/experiments/animation/data/"
 
 from src.experiment_manager import experiment_manager
 from src.get_noise_level import get_noise_level
-from src.models.likelihoods.pairwise import PairwiseLogitLikelihood
-from src.models.pairwise_gp import PairwiseGP
 
 
 # Objective function
 input_dim = 5
 
-datapoints = torch.tensor(np.loadtxt(data_folder + "datapoints_norm.txt"))
-comparisons = torch.tensor(np.loadtxt(data_folder + "responses.txt"))
-likelihood_func = PairwiseLogitLikelihood()
-aux_model = PairwiseGP(
-    datapoints,
-    comparisons,
-    likelihood=likelihood_func,
-    jitter=1e-4,
-)
-animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict")
-aux_model.load_state_dict(animation_surrogate_state_dict)
-aux_model(datapoints)
-aux_model.eval()
+datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
+comparisons = np.loadtxt(data_folder + "responses.txt")
+n_queries = comparisons.shape[0]
 
-N = 10000
+K = RBF(length_scale=0.2)
+
+
+def my_kernel(x, y):
+    a = x[:5].reshape(1, -1)
+    b = x[5:].reshape(1, -1)
+    c = y[:5].reshape(1, -1)
+    d = y[5:].reshape(1, -1)
+    return K(a, c) - K(a, d) - K(b, c) + K(b, d)
+
+
+def proxy_kernel(X, Y):
+    """Another function to return the gram_matrix,
+    which is needed in SVC's kernel or fit
+    """
+    gram_matrix = np.zeros((len(X), len(Y)))
+    for i, x in enumerate(X):
+        for j, y in enumerate(Y):
+            gram_matrix[i, j] = my_kernel(x, y)
+    return gram_matrix
+
+
+inputs = []
+labels = []
+for i in range(n_queries):
+    inputs.append(datapoints[2 * i : 2 * (i + 1), :].flatten())
+    labels.append(0 if comparisons[i, 0] < comparisons[i, 1] else 1)
+
+aux_model = svm.SVC(kernel=proxy_kernel)
+aux_model.fit(inputs, labels)
+
+print(
+    aux_model.decision_function(np.asarray([0.1 * i for i in range(10)]).reshape(1, -1))
+)
+
+N = 1000
 
 
 def obj_func(X: Tensor) -> Tensor:
+    reference_point = torch.zeros(size=X.size()) + 0.5
+    X_aux = torch.cat([X, reference_point], dim=-1)
     if X.shape[0] > N:
         n_batches = int(X.shape[0] / N)
         objective_X = []
         for i in range(n_batches):
-            objective_X.append(aux_model(X[i * N : (i + 1) * N, ...]).mean.detach())
+            objective_X.append(
+                torch.tensor(
+                    aux_model.decision_function(X_aux[i * N : (i + 1) * N, ...].numpy())
+                )
+            )
         objective_X = torch.cat(objective_X, dim=0)
     else:
-        objective_X = aux_model(X).mean.detach()
+        objective_X = torch.tensor(aux_model.decision_function(X_aux.numpy()))
+    objective_X = 10 * objective_X
     return objective_X
 
 
 # Algos
-# algo = "Random"
+algo = "Random"
 # algo = "EMOV"
-algo = "EI"
+# algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
@@ -72,7 +104,7 @@ if False:
         input_dim,
         target_error=0.1 * float(noise_level_id),
         top_proportion=0.01,
-        num_samples=100000,
+        num_samples=10000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
@@ -80,7 +112,7 @@ if False:
 if comp_noise_type == "probit":
     noise_level = 0.0
 elif comp_noise_type == "logit":
-    noise_level = 0.0440
+    noise_level = 0.3051
 
 # Run experiment
 if len(sys.argv) == 3:

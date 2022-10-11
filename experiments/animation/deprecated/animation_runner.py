@@ -18,40 +18,46 @@ data_folder = project_path + "/experiments/animation_data/"
 
 from src.experiment_manager import experiment_manager
 from src.get_noise_level import get_noise_level
-from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.likelihoods.pairwise import PairwiseLogitLikelihood
+from src.models.pairwise_gp import PairwiseGP
 
 
 # Objective function
 input_dim = 5
 
-datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
-comparisons = np.loadtxt(data_folder + "responses.txt")
-n_queries = comparisons.shape[0]
-queries = []
-responses = []
+datapoints = torch.tensor(np.loadtxt(data_folder + "datapoints_norm.txt"))
+comparisons = torch.tensor(np.loadtxt(data_folder + "responses.txt"))
+likelihood_func = PairwiseLogitLikelihood()
+aux_model = PairwiseGP(
+    datapoints,
+    comparisons,
+    likelihood=likelihood_func,
+    jitter=1e-4,
+)
+animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict")
+aux_model.load_state_dict(animation_surrogate_state_dict)
+aux_model(datapoints)
+aux_model.eval()
 
-for i in range(n_queries):
-    queries.append(datapoints[2 * i : 2 * (i + 1), :])
-    responses.append(0 if comparisons[i, 0] < comparisons[i, 1] else 1)
-
-queries = torch.tensor(queries)
-responses = torch.tensor(responses)
-aux_model = PairwiseKernelVariationalGP(queries, responses, fit_aux_model_flag=False)
-animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict2")
-aux_model.aux_model.load_state_dict(animation_surrogate_state_dict)
-aux_model.aux_model(aux_model.aux_model.train_inputs[0])
-aux_model.aux_model.eval()
+N = 10000
 
 
 def obj_func(X: Tensor) -> Tensor:
-    objective_X = aux_model(X).mean.detach()
+    if X.shape[0] > N:
+        n_batches = int(X.shape[0] / N)
+        objective_X = []
+        for i in range(n_batches):
+            objective_X.append(aux_model(X[i * N : (i + 1) * N, ...]).mean.detach())
+        objective_X = torch.cat(objective_X, dim=0)
+    else:
+        objective_X = aux_model(X).mean.detach()
     return objective_X
 
 
 # Algos
 # algo = "Random"
-algo = "EMOV"
-# algo = "EI"
+# algo = "EMOV"
+algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 # algo = "PKG"
@@ -66,15 +72,15 @@ if False:
         input_dim,
         target_error=0.1 * float(noise_level_id),
         top_proportion=0.01,
-        num_samples=10000,
+        num_samples=100000,
         comp_noise_type=comp_noise_type,
     )
     print(noise_level)
 
 if comp_noise_type == "probit":
-    noise_level = 1.6239
+    noise_level = 0.0
 elif comp_noise_type == "logit":
-    noise_level = 1.2165
+    noise_level = 0.0440
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -85,14 +91,14 @@ elif len(sys.argv) == 2:
     last_trial = int(sys.argv[1])
 
 experiment_manager(
-    problem="animation2",
+    problem="animation",
     obj_func=obj_func,
     input_dim=input_dim,
     comp_noise_type=comp_noise_type,
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=4 * input_dim,
+    num_init_queries=5 * input_dim,
     num_algo_queries=250,
     first_trial=first_trial,
     last_trial=last_trial,
