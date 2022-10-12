@@ -26,7 +26,7 @@ from botorch.models.transforms.input import InputTransform
 from botorch.posteriors.gpytorch import GPyTorchPosterior
 from botorch.posteriors.posterior import Posterior
 from gpytorch import settings
-from gpytorch.constraints import GreaterThan
+from gpytorch.constraints import Positive
 from gpytorch.distributions.multivariate_normal import MultivariateNormal
 from gpytorch.kernels.rbf_kernel import RBFKernel
 from gpytorch.kernels.scale_kernel import ScaleKernel
@@ -126,7 +126,7 @@ class TopChoiceGP(Model, GP):
 
         # Set optional parameters
         # Explicitly set jitter for numerical stability in psd_safe_cholesky
-        self._jitter = kwargs.get("jitter", 1e-5)
+        self._jitter = kwargs.get("jitter", 1e-6)
         # Stopping creteria in scipy.optimize.fsolve used to find f_map in _update()
         # If None, set to 1e-6 by default in _update
         self._xtol = kwargs.get("xtol")
@@ -156,14 +156,11 @@ class TopChoiceGP(Model, GP):
                     batch_shape=self.batch_shape,
                     ard_num_dims=self.dim,
                     lengthscale_prior=ls_prior,
-                    lengthscale_constraint=GreaterThan(
-                        lower_bound=1e-4, transform=None, initial_value=ls_prior_mode
+                    lengthscale_constraint=Positive(
+                        transform=None, initial_value=ls_prior_mode
                     ),
                 ),
-                outputscale_prior=SmoothedBoxPrior(a=0.2, b=5),
-                outputscale_constraint=GreaterThan(
-                    lower_bound=1e-4, transform=None, initial_value=1
-                ),
+                outputscale_prior=SmoothedBoxPrior(a=1, b=4),
             )
 
         self.covar_module = covar_module
