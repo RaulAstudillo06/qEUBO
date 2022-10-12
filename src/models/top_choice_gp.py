@@ -281,6 +281,31 @@ class TopChoiceGP(Model, GP):
         pred_covar = self._calc_covar(X, X)
         return pred_mean, pred_covar
 
+    def _add_jitter(self, X: Tensor) -> Tensor:
+        jitter_prev = 0
+        Eye = torch.eye(X.size(-1), device=X.device, dtype=X.dtype).expand(X.shape)
+        for i in range(3):
+            jitter_new = self._jitter * (10 ** i)
+            X = X + (jitter_new - jitter_prev) * Eye
+            jitter_prev = jitter_new
+            # This may be VERY slow given upstream pytorch issue:
+            # https://github.com/pytorch/pytorch/issues/34272
+            try:
+                _ = torch.linalg.cholesky(X)
+                warnings.warn(
+                    "X is not a p.d. matrix; "
+                    f"Added jitter of {jitter_new:.2e} to the diagonal",
+                    RuntimeWarning,
+                )
+                return X
+            except RuntimeError:
+                continue
+        warnings.warn(
+            f"Failed to render X p.d. after adding {jitter_new:.2e} jitter",
+            RuntimeWarning,
+        )
+        return X
+
     def _grad_posterior_f(
         self,
         utility: Union[Tensor, np.ndarray],
