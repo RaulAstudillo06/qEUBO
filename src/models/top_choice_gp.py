@@ -865,26 +865,14 @@ class TopChoiceGP(Model, GP):
 
             output_mean, output_covar = pred_mean, pred_covar
 
-        try:
-            if self.datapoints is None:
-                diag_jitter = torch.eye(output_covar.size(-1))
-            else:
-                diag_jitter = torch.eye(
-                    output_covar.size(-1),
-                    dtype=self.datapoints.dtype,
-                    device=self.datapoints.device,
-                )
-            diag_jitter = diag_jitter.expand(output_covar.shape)
-            diag_jitter = diag_jitter * self._jitter
-            # Preemptively adding jitter to diagonal to prevent the use of _add_jitter
-            # given that torch.cholesky may be very slow on non-pd matrix input
-            # See https://github.com/pytorch/pytorch/issues/34272
-            # TODO: remove this once torch.cholesky issue is resolved
-            output_covar = output_covar + diag_jitter
-            post = MultivariateNormal(output_mean, output_covar)
-        except RuntimeError:
-            output_covar = self._add_jitter(output_covar)
-            post = MultivariateNormal(output_mean, output_covar)
+        post = MultivariateNormal(
+            mean=output_mean,
+            # output_covar is sometimes non-PSD
+            # perform a cholesky decomposition to check and amend
+            covariance_matrix=self._scaled_psd_safe_cholesky(
+                output_covar, jitter=self._jitter
+            ),
+        )
         return post
 
     # ============== botorch.models.model.Model interfaces ==============
