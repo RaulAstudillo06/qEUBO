@@ -96,7 +96,7 @@ algo = "Random"
 
 # estimate noise level
 comp_noise_type = "logit"
-noise_level_id = 2
+noise_level_id = 3
 
 if False:
     noise_level = get_noise_level(
@@ -112,7 +112,8 @@ if False:
 if comp_noise_type == "probit":
     noise_level = 0.0
 elif comp_noise_type == "logit":
-    noise_level = 0.3051
+    noise_levels = [0.1916, 0.3051, 0.9254]
+    noise_level = noise_levels[noise_level_id - 1]
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -131,7 +132,7 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=5 * input_dim,
-    num_algo_queries=250,
+    num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,
