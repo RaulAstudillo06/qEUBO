@@ -30,7 +30,7 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
             [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
         ).T
         inducing_points = draw_sobol_samples(
-            bounds=bounds, n=2 ** (self.input_dim + 2), q=1, seed=0
+            bounds=bounds, n=2 ** (self.input_dim + 1), q=1, seed=0
         ).squeeze(1)
         inducing_points = torch.cat([inducing_points, train_x], dim=0)
         # Construct variational dist/strat
@@ -47,7 +47,8 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
         self.likelihood = SoftmaxLikelihood(num_features=self.q, num_classes=self.q, mixing_weights=False)
         # Mean and cov
         self.mean_module = ConstantMean()
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=self.input_dim, lengthscale_prior=GammaPrior(3.0, 6.0), outputscale_prior=GammaPrior(2.0, 0.15)))
+        scales = bounds[1, :] - bounds[0, :]
+        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=self.input_dim, lengthscale_prior=GammaPrior(3.0, 6.0 / scales)), outputscale_prior=GammaPrior(2.0, 0.15))
         self.train_inputs = (queries,)
         self.train_targets = train_y
 
