@@ -9,7 +9,7 @@ from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
 torch.autograd.set_detect_anomaly(True)
-debug._set_state(False)
+debug._set_state(True)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
 print(script_dir[:-12])
@@ -32,7 +32,7 @@ def obj_func(X: Tensor) -> Tensor:
 
 # Algos
 # algo = "Random"
-algo = "EI"
+algo = "EMOV"
 # algo = "EI"
 # algo = "NEI"
 # algo = "TS"
@@ -76,8 +76,8 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=2 * (input_dim + 1),
-    num_max_iter=300,
+    num_init_queries=4 * input_dim,
+    num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=False,

@@ -4,9 +4,10 @@ import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
-from botorch.fit import fit_gpytorch_model
+from botorch.fit import fit_gpytorch_model#, fit_gpytorch_mll
 from botorch.optim.initializers import gen_batch_initial_conditions
 from botorch.optim.optimize import optimize_acqf
+from gpytorch.mlls.variational_elbo import VariationalELBO
 from torch import Tensor
 from torch.distributions import Bernoulli, Normal, Gumbel
 
@@ -18,6 +19,7 @@ from src.models.likelihoods.pairwise import (
 )
 from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.preferential_variational_gp import PreferentialVariationalGP
 from src.models.top_choice_gp import (
     TopChoiceGP,
     TopChoiceLaplaceMarginalLogLikelihood,
@@ -30,6 +32,8 @@ def fit_model(
     model_type: str,
     likelihood: Optional[str] = "logit",
 ):
+    model_type = "preferential_variational_gp"
+    #model_type = "pairwise_kernel_variational_gp"
     if model_type == "pairwise_gp":
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
 
@@ -56,6 +60,14 @@ def fit_model(
         model = model.to(device=queries.device, dtype=queries.dtype)
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
+    elif model_type == "preferential_variational_gp":
+        model = PreferentialVariationalGP(queries, responses)
+        mll = VariationalELBO(
+            likelihood=model.likelihood,
+            model=model,
+            num_data=model.num_data,
+        )
+        mll = fit_gpytorch_model(mll)
     return model
 
 
@@ -99,15 +111,11 @@ def generate_random_queries(
 def generate_queries_against_baseline(
     num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
 ):
-    # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
-    # random_points = generate_random_queries(10 * (2 ** input_dim), 1, input_dim, seed + 1)
-    # obj_vals = get_obj_vals(random_points, obj_func).squeeze(-1)
-    best_point = torch.tensor(
-        [0.52] * input_dim
-    )  # random_points[torch.argmax(obj_vals), ...].unsqueeze(0)
+    baseline_point = torch.tensor(
+        [0.52] * input_dim # may try 0.51 too
+    )
     queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
-    queries = torch.cat([best_point.expand_as(queries), queries], dim=1)
-    # print(obj_func(queries))
+    queries = torch.cat([baseline_point.expand_as(queries), queries], dim=1)
     return queries
 
 
@@ -219,13 +227,16 @@ def optimize_acqf_and_get_suggested_query(
     )
 
     candidates = candidates.detach()
-    acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
+    #acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
     # print("Acquisition values:")
     # print(acq_values_sorted)
     # print("Candidates:")
     # print(candidates[indices].squeeze())
     # print(candidates.squeeze())
+    #print(candidates.shape)
+    #print(acq_values.shape)
     new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
+    #print(new_x)
     return new_x
 
 

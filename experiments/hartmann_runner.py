@@ -30,8 +30,8 @@ input_dim = 6
 
 # Algos
 # algo = "Random"
-# algo = "EMOV"
-algo = "EI"
+algo = "EMOV"
+# algo = "EI"
 # algo = "NEI"
 # algo = "TS"
 
@@ -73,7 +73,7 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=2 * (input_dim + 1),
+    num_init_queries=4 * input_dim,
     num_max_iter=200,
     first_trial=first_trial,
     last_trial=last_trial,
