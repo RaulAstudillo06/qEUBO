@@ -333,7 +333,7 @@ def get_new_suggested_query(
         sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
         if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
-        elif model_type == "pairwise_kernel_variational_gp":
+        else:
             X_baseline = model.queries.clone()
             X_baseline = X_baseline.view(
                 (X_baseline.shape[0] * X_baseline.shape[1], X_baseline.shape[2])

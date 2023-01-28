@@ -32,8 +32,6 @@ def fit_model(
     model_type: str,
     likelihood: Optional[str] = "logit",
 ):
-    model_type = "preferential_variational_gp"
-    #model_type = "pairwise_kernel_variational_gp"
     if model_type == "pairwise_gp":
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
 
