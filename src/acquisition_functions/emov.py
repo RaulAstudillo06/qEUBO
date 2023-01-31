@@ -6,7 +6,7 @@ import torch
 from botorch.acquisition import AcquisitionFunction, MCAcquisitionFunction
 from botorch.acquisition.objective import MCAcquisitionObjective
 from botorch.models.model import Model
-from botorch.sampling.samplers import MCSampler
+from botorch.sampling import MCSampler
 from botorch.utils.transforms import (
     concatenate_pending_points,
     t_batch_mode_transform,

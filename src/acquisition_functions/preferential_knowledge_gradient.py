@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 from botorch.acquisition import OneShotAcquisitionFunction
 from botorch.models.model import Model
-from botorch.sampling.samplers import MCSampler, SobolQMCNormalSampler
+from botorch.sampling import MCSampler
 from botorch.utils.transforms import t_batch_mode_transform
 from torch import Tensor
 

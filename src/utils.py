@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
-from botorch.fit import fit_gpytorch_model#, fit_gpytorch_mll
+from botorch.fit import fit_gpytorch_mll
 from botorch.optim.initializers import gen_batch_initial_conditions
 from botorch.optim.optimize import optimize_acqf
 from gpytorch.mlls.variational_elbo import VariationalELBO
@@ -54,18 +54,24 @@ def fit_model(
             model = TopChoiceGP(datapoints=datapoints, choices=comparisons)
             mll = TopChoiceLaplaceMarginalLogLikelihood(model.likelihood, model)
 
-        fit_gpytorch_model(mll)
+        fit_gpytorch_mll(mll)
         model = model.to(device=queries.device, dtype=queries.dtype)
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
+        print(model.state_dict())
     elif model_type == "preferential_variational_gp":
         model = PreferentialVariationalGP(queries, responses)
+        model.train()
+        model.likelihood.train()
         mll = VariationalELBO(
             likelihood=model.likelihood,
             model=model,
             num_data=model.num_data,
         )
-        mll = fit_gpytorch_model(mll)
+        mll = fit_gpytorch_mll(mll)
+        model.eval()
+        model.likelihood.eval()
+        print(model.state_dict())
     return model
 
 

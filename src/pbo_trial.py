@@ -13,7 +13,7 @@ from botorch.acquisition import (
     qNoisyExpectedImprovement,
 )
 from botorch.models.model import Model
-from botorch.sampling.samplers import SobolQMCNormalSampler
+from botorch.sampling import SobolQMCNormalSampler
 from torch import Tensor
 
 from src.acquisition_functions.emov import (
@@ -317,7 +317,8 @@ def get_new_suggested_query(
     elif algo == "ANALYT_EMOV":
         acquisition_function = ExpectedMaxObjectiveValue(model=model)
     elif algo == "EMOV":
-        acquisition_function = qExpectedMaxObjectiveValue(model=model)
+        sampler = SobolQMCNormalSampler(sample_shape=64)
+        acquisition_function = qExpectedMaxObjectiveValue(model=model, sampler=sampler)
     elif algo == "PKG":
         acquisition_function = PreferentialKnowledgeGradient(model=model)
     elif algo == "PKG_EUBO_INIT":
@@ -330,7 +331,7 @@ def get_new_suggested_query(
             raw_samples=raw_samples,
         )
     elif algo == "EI":
-        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
+        sampler = SobolQMCNormalSampler(sample_shape=64)
         if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
         else:
@@ -347,7 +348,7 @@ def get_new_suggested_query(
             sampler=sampler,
         )
     elif algo == "NEI":
-        sampler = SobolQMCNormalSampler(num_samples=64, collapse_batch_dims=True)
+        sampler = SobolQMCNormalSampler(sample_shape=64)
         if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
         elif model_type == "pairwise_kernel_variational_gp":
