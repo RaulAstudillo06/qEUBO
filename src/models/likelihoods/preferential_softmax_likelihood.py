@@ -5,10 +5,10 @@ import warnings
 import torch
 
 from gpytorch.distributions import Distribution, MultitaskMultivariateNormal, base_distributions
-from gpytorch.likelihoods import Likelihood
+from gpytorch.likelihoods import _OneDimensionalLikelihood
 
 
-class PreferentialSoftmaxLikelihood(Likelihood):
+class PreferentialSoftmaxLikelihood(_OneDimensionalLikelihood):
     r"""
     Implements the Softmax likelihood used for GP preference learning.
 
@@ -31,14 +31,3 @@ class PreferentialSoftmaxLikelihood(Likelihood):
 
         res = base_distributions.Categorical(logits=function_samples)
         return res
-
-    def __call__(self, function, *params, **kwargs):
-        if isinstance(function, Distribution) and not isinstance(function, MultitaskMultivariateNormal):
-            print(e)
-            warnings.warn(
-                "The input to SoftmaxLikelihood should be a MultitaskMultivariateNormal (num_data x num_tasks). "
-                "Batch MultivariateNormal inputs (num_tasks x num_data) will be deprectated.",
-                DeprecationWarning,
-            )
-            function = MultitaskMultivariateNormal.from_batch_mvn(function)
-        return super().__call__(function, *params, **kwargs)
