@@ -7,16 +7,24 @@ from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ApproximateGP
 from gpytorch.priors.torch_priors import GammaPrior
-from gpytorch.variational import CholeskyVariationalDistribution, VariationalStrategy
+from gpytorch.variational import (
+    CholeskyVariationalDistribution,
+    UnwhitenedVariationalStrategy,
+    VariationalStrategy,
+)
 from torch import Tensor
 
-from src.models.likelihoods.preferential_softmax_likelihood import PreferentialSoftmaxLikelihood
+from src.models.likelihoods.preferential_softmax_likelihood import (
+    PreferentialSoftmaxLikelihood,
+)
+
 
 class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
     def __init__(
-        self, 
+        self,
         queries: Tensor,
         responses: Tensor,
+        use_withening: bool = True,
     ) -> None:
         self.queries = queries
         self.responses = responses
@@ -28,27 +36,44 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
         bounds = torch.tensor(
             [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
         ).T
-        inducing_points = draw_sobol_samples(
-            bounds=bounds, n=2 ** (self.input_dim + 1), q=1, seed=0
-        ).squeeze(1)
-        #print(inducing_points.shape)
-        inducing_points = torch.cat([inducing_points, train_x], dim=0)
-        # Construct variational dist/strat
-        variational_distribution = CholeskyVariationalDistribution(
-            inducing_points.size(-2)
-        )
-        variational_strategy = VariationalStrategy(
-            self,
-            inducing_points,
-            variational_distribution,
-            learn_inducing_locations=False,
-        )
+        if use_withening:
+            inducing_points = draw_sobol_samples(
+                bounds=bounds, n=2 * (self.input_dim + 1), q=1
+            ).squeeze(1)
+            inducing_points = torch.cat([inducing_points, train_x], dim=0)
+            # Construct variational dist/strat
+            variational_distribution = CholeskyVariationalDistribution(
+                inducing_points.size(-2)
+            )
+            variational_strategy = VariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            )
+        else:
+            inducing_points = train_x
+            variational_distribution = CholeskyVariationalDistribution(
+                inducing_points.size(-2)
+            )
+            variational_strategy = UnwhitenedVariationalStrategy(
+                self,
+                inducing_points,
+                variational_distribution,
+                learn_inducing_locations=False,
+            )
         super().__init__(variational_strategy)
         self.likelihood = PreferentialSoftmaxLikelihood(num_points=self.q)
         # Mean and cov
         self.mean_module = ConstantMean()
         scales = bounds[1, :] - bounds[0, :]
-        self.covar_module = ScaleKernel(RBFKernel(ard_num_dims=self.input_dim, lengthscale_prior=GammaPrior(3.0, 6.0 / scales)), outputscale_prior=GammaPrior(2.0, 0.15))
+        self.covar_module = ScaleKernel(
+            RBFKernel(
+                ard_num_dims=self.input_dim,
+                lengthscale_prior=GammaPrior(3.0, 6.0 / scales),
+            ),
+            outputscale_prior=GammaPrior(2.0, 0.15),
+        )
         self.train_inputs = (train_x,)
         self.train_targets = train_y
 
