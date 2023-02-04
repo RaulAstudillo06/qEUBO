@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
-from botorch.fit import fit_gpytorch_mll
+from botorch.fit import fit_gpytorch_mll, fit_gpytorch_mll_scipy
 from botorch.optim.initializers import gen_batch_initial_conditions
 from botorch.optim.optimize import optimize_acqf
 from gpytorch.mlls.variational_elbo import VariationalELBO
@@ -32,6 +32,7 @@ def fit_model(
     model_type: str,
     likelihood: Optional[str] = "logit",
 ):
+    # model_type = "pairwise_kernel_variational_gp"
     if model_type == "pairwise_gp":
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
 
@@ -58,20 +59,62 @@ def fit_model(
         model = model.to(device=queries.device, dtype=queries.dtype)
     elif model_type == "pairwise_kernel_variational_gp":
         model = PairwiseKernelVariationalGP(queries, responses)
-        print(model.state_dict())
+        model.eval()
     elif model_type == "preferential_variational_gp":
         model = PreferentialVariationalGP(queries, responses)
         model.train()
         model.likelihood.train()
-        mll = VariationalELBO(
-            likelihood=model.likelihood,
-            model=model,
-            num_data=model.num_data,
-        )
-        mll = fit_gpytorch_mll(mll)
+        if True:
+            #######################
+            training_iterations = 400
+            # Use the adam optimizer
+            train_x = queries.reshape(
+                queries.shape[0] * queries.shape[1], queries.shape[2]
+            )
+            train_y = responses.squeeze(-1)
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
+
+            # "Loss" for GPs - the marginal log likelihood
+            # num_data refers to the number of training datapoints
+            mll = VariationalELBO(model.likelihood, model, 2 * model.num_data)
+
+            for i in range(training_iterations):
+                # Zero backpropped gradients from previous iteration
+                optimizer.zero_grad()
+                # Get predictive output
+                output = model(train_x)
+                print(model.covar_module.raw_outputscale)
+                # print(train_y)
+                # print(output.mean)
+                # Calc loss and backprop gradients
+                loss = -mll(output, train_y)
+                loss.backward()
+                print(
+                    "Iter %d/%d - Loss: %.3f"
+                    % (i + 1, training_iterations, loss.item())
+                )
+                optimizer.step()
+        #############################
+        else:
+            mll = VariationalELBO(
+                likelihood=model.likelihood,
+                model=model,
+                num_data=2 * model.num_data,
+            )
+            mll = fit_gpytorch_mll(mll)
         model.eval()
         model.likelihood.eval()
-        print(model.state_dict())
+        # print(model.state_dict())
+    print(model.state_dict())
+    train_y = responses.squeeze(-1)
+    # print(train_y)
+    # print(model.variational_strategy.inducing_points.shape)
+    mean = model.posterior(queries).mean.squeeze()
+    # train_x = queries.reshape(queries.shape[0] * queries.shape[1], queries.shape[2])
+    # mean = model.posterior(train_x + 1.0).mean.squeeze()
+    mean_diff = mean[..., 0] - mean[..., 1]
+    predicted_pref = torch.where(mean_diff > 0.0, 0, 1)
+    print(train_y - predicted_pref)
     return model
 
 
@@ -115,9 +158,7 @@ def generate_random_queries(
 def generate_queries_against_baseline(
     num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
 ):
-    baseline_point = torch.tensor(
-        [0.52] * input_dim # may try 0.51 too
-    )
+    baseline_point = torch.tensor([0.52] * input_dim)  # may try 0.51 too
     queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
     queries = torch.cat([baseline_point.expand_as(queries), queries], dim=1)
     return queries
@@ -128,7 +169,7 @@ def generate_queries_against_baseline2(
 ):
     # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
     random_queries = generate_random_queries(
-        num_queries=5 * (2 ** input_dim),
+        num_queries=5 * (2**input_dim),
         batch_size=batch_size,
         input_dim=input_dim,
         seed=seed + 1,
@@ -231,16 +272,16 @@ def optimize_acqf_and_get_suggested_query(
     )
 
     candidates = candidates.detach()
-    #acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
+    # acq_values_sorted, indices = torch.sort(acq_values.squeeze(), descending=True)
     # print("Acquisition values:")
     # print(acq_values_sorted)
     # print("Candidates:")
     # print(candidates[indices].squeeze())
     # print(candidates.squeeze())
-    #print(candidates.shape)
-    #print(acq_values.shape)
+    # print(candidates.shape)
+    # print(acq_values.shape)
     new_x = get_best_candidates(batch_candidates=candidates, batch_values=acq_values)
-    #print(new_x)
+    # print(new_x)
     return new_x
 
 
