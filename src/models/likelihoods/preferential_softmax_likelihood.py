@@ -19,6 +19,7 @@ class PreferentialSoftmaxLikelihood(Likelihood):
     def __init__(self, num_points):
         super().__init__()
         self.num_points = num_points
+        self.noise = torch.tensor(1e-4)
 
     def forward(self, function_samples, *params, **kwargs):
         # print(function_samples[1, ...])
