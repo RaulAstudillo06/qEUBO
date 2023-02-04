@@ -83,16 +83,17 @@ def fit_model(
                 optimizer.zero_grad()
                 # Get predictive output
                 output = model(train_x)
-                print(model.covar_module.raw_outputscale)
+                # print(model.covar_module.raw_outputscale)
                 # print(train_y)
                 # print(output.mean)
                 # Calc loss and backprop gradients
                 loss = -mll(output, train_y)
                 loss.backward()
-                print(
-                    "Iter %d/%d - Loss: %.3f"
-                    % (i + 1, training_iterations, loss.item())
-                )
+                if False:
+                    print(
+                        "Iter %d/%d - Loss: %.3f"
+                        % (i + 1, training_iterations, loss.item())
+                    )
                 optimizer.step()
         #############################
         else:
