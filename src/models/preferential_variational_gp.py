@@ -32,7 +32,6 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
         self.q = queries.shape[-2]
         self.num_data = queries.shape[-3]
         train_x = queries.reshape(queries.shape[0] * queries.shape[1], queries.shape[2])
-        # print(queries)
         train_y = responses.squeeze(-1)
         bounds = torch.tensor(
             [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
@@ -42,7 +41,6 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
                 bounds=bounds, n=2 * self.input_dim, q=1
             ).squeeze(1)
             inducing_points = torch.cat([inducing_points, train_x], dim=0)
-            inducing_points = train_x
             # Construct variational dist/strat
             variational_distribution = CholeskyVariationalDistribution(
                 inducing_points.size(-2)
