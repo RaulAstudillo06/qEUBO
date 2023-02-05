@@ -1,10 +1,11 @@
 import torch
 from botorch.acquisition.analytic import PosteriorMean
 from botorch.utils.gp_sampling import get_gp_samples
-from copy import deepcopy
+from copy import copy, deepcopy
 
 from src.models.pairwise_gp import PairwiseGP
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
+from src.models.preferential_variational_gp import PreferentialVariationalGP
 from src.models.top_choice_gp import TopChoiceGP
 from src.utils import (
     optimize_acqf_and_get_suggested_query,
@@ -37,31 +38,41 @@ def get_pairwise_gp_rff_sample(model, n_samples):
     if isinstance(model, PairwiseGP) or isinstance(model, TopChoiceGP):
         # force the model to infer utility
         model.posterior(model.datapoints)
-        modified_model = deepcopy(model)
-        modified_model.likelihood.noise = torch.tensor(1.0).double()
-        modified_model.train_targets = model.utility
+        adapted_model = deepcopy(model)
+        adapted_model.likelihood.noise = torch.tensor(1.0).double()
+        adapted_model.train_targets = model.utility
     elif isinstance(model, PairwiseKernelVariationalGP):
-        modified_model = deepcopy(model)
-        queries = modified_model.queries.clone()
+        adapted_model = deepcopy(model)
+        queries = adapted_model.queries.clone()
         queries_items = queries.view(
             (queries.shape[0] * queries.shape[1], queries.shape[2])
         )
-        modified_model.train_inputs = [queries_items]
-        sample_at_queries_items = modified_model.posterior(queries_items).sample()
-        modified_model.train_targets = sample_at_queries_items.view(
+        adapted_model.train_inputs = [queries_items]
+        sample_at_queries_items = adapted_model.posterior(queries_items).sample()
+        adapted_model.train_targets = sample_at_queries_items.view(
             (queries_items.shape[0],)
         )
-        modified_model.covar_module = (
-            modified_model.aux_model.covar_module.latent_kernel
-        )
+        adapted_model.covar_module = adapted_model.aux_model.covar_module.latent_kernel
 
         class LikelihoodForRFF:
             noise = torch.tensor(1.0).double()
 
-        modified_model.likelihood = LikelihoodForRFF()
+        adapted_model.likelihood = LikelihoodForRFF()
+
+    elif isinstance(model, PreferentialVariationalGP):
+        adapted_model = copy(model)
+        queries_items = adapted_model.train_inputs[0]
+        sample_at_queries_items = adapted_model.posterior(queries_items).sample()
+        sample_at_queries_items = sample_at_queries_items.view(
+            (queries_items.shape[0],)
+        )
+        sample_at_queries_items = (
+            sample_at_queries_items - sample_at_queries_items.mean()
+        ) / sample_at_queries_items.std()
+        adapted_model.train_targets = sample_at_queries_items
 
     gp_samples = get_gp_samples(
-        model=modified_model,
+        model=adapted_model,
         num_outputs=1,
         n_samples=n_samples,
         num_rff_features=1000,
