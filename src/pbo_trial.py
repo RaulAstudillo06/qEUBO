@@ -258,16 +258,19 @@ def pbo_trial(
         print("Max objecive value within queries: " + str(max_obj_val_within_queries))
 
         # Save data
-        if not os.path.exists(results_folder):
-            os.makedirs(results_folder)
-        if not os.path.exists(results_folder + "queries/"):
-            os.makedirs(results_folder + "queries/")
-        if not os.path.exists(results_folder + "obj_vals/"):
-            os.makedirs(results_folder + "obj_vals/")
-        if not os.path.exists(results_folder + "responses/"):
-            os.makedirs(results_folder + "responses/")
-        if not os.path.exists(results_folder + "runtimes/"):
-            os.makedirs(results_folder + "runtimes/")
+        try:
+            if not os.path.exists(results_folder):
+                os.makedirs(results_folder)
+            if not os.path.exists(results_folder + "queries/"):
+                os.makedirs(results_folder + "queries/")
+            if not os.path.exists(results_folder + "obj_vals/"):
+                os.makedirs(results_folder + "obj_vals/")
+            if not os.path.exists(results_folder + "responses/"):
+                os.makedirs(results_folder + "responses/")
+            if not os.path.exists(results_folder + "runtimes/"):
+                os.makedirs(results_folder + "runtimes/")
+        except:
+            pass
 
         queries_reshaped = queries.numpy().reshape(queries.shape[0], -1)
         np.savetxt(
