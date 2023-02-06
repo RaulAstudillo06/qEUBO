@@ -2,8 +2,10 @@
 
 import torch
 
+from botorch.sampling import SobolQMCNormalSampler
+from botorch.posteriors.gpytorch import GPyTorchPosterior
 from gpytorch.distributions import base_distributions
-from gpytorch.likelihoods import _OneDimensionalLikelihood, Likelihood
+from gpytorch.likelihoods import Likelihood
 
 
 class PreferentialSoftmaxLikelihood(Likelihood):
@@ -20,6 +22,13 @@ class PreferentialSoftmaxLikelihood(Likelihood):
         super().__init__()
         self.num_points = num_points
         self.noise = torch.tensor(1e-4)
+        self.sampler = SobolQMCNormalSampler(sample_shape=1000)
+
+    def _draw_likelihood_samples(
+        self, function_dist, *args, sample_shape=None, **kwargs
+    ):
+        function_samples = self.sampler(GPyTorchPosterior(function_dist)).squeeze(-1)
+        return self.forward(function_samples, *args, **kwargs)
 
     def forward(self, function_samples, *params, **kwargs):
         # print(function_samples[1, ...])
