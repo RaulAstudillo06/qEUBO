@@ -22,7 +22,7 @@ class PreferentialSoftmaxLikelihood(Likelihood):
         super().__init__()
         self.num_points = num_points
         self.noise = torch.tensor(1e-4)
-        self.sampler = SobolQMCNormalSampler(sample_shape=1000)
+        self.sampler = SobolQMCNormalSampler(sample_shape=512)
 
     def _draw_likelihood_samples(
         self, function_dist, *args, sample_shape=None, **kwargs

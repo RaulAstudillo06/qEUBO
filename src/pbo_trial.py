@@ -309,8 +309,8 @@ def get_new_suggested_query(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = 2 * input_dim * batch_size
-    raw_samples = 60 * input_dim * batch_size
+    num_restarts = input_dim * batch_size
+    raw_samples = 30 * input_dim * batch_size
     batch_initial_conditions = None
 
     if algo == "Random":
@@ -368,7 +368,7 @@ def get_new_suggested_query(
     elif algo == "TS":
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
         return gen_thompson_sampling_query(
-            model, batch_size, standard_bounds, 2 * input_dim, 60 * input_dim
+            model, batch_size, standard_bounds, input_dim, 30 * input_dim
         )
 
     new_query = optimize_acqf_and_get_suggested_query(
@@ -391,8 +391,8 @@ def compute_obj_val_at_max_post_mean(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = 8 * input_dim
-    raw_samples = 240 * input_dim
+    num_restarts = 4 * input_dim
+    raw_samples = 120 * input_dim
 
     post_mean_func = PosteriorMean(model=model)
     max_post_mean_func = optimize_acqf_and_get_suggested_query(
