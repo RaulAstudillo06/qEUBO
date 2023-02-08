@@ -77,7 +77,7 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=4 * input_dim,
-    num_max_iter=200,
+    num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=True,
