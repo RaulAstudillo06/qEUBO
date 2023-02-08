@@ -62,7 +62,7 @@ def get_pairwise_gp_rff_sample(model, n_samples):
     elif isinstance(model, PreferentialVariationalGP):
         adapted_model = copy(model)
         queries_items = adapted_model.train_inputs[0]
-        use_mean = True
+        use_mean = False
         if use_mean:
             sample_at_queries_items = adapted_model.posterior(
                 queries_items
