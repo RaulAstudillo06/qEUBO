@@ -3,7 +3,6 @@ import sys
 import torch
 
 from botorch.settings import debug
-from math import pi
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
@@ -31,12 +30,12 @@ def obj_func(X: Tensor) -> Tensor:
 
 
 # Algos
-# algo = "Random"
-algo = "EMOV"
-# algo = "EI"
-# algo = "NEI"
-# algo = "TS"
-# algo = "PKG"
+# algo = "random"
+# algo = "analytic_eubo"
+algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+# algo = "ts"
 
 # estimate noise level
 comp_noise_type = "logit"
@@ -53,9 +52,7 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_levels = [0.2844, 0.6804, 1.3489]
-elif comp_noise_type == "logit":
+if comp_noise_type == "logit":
     noise_levels = [0.2326, 0.5726, 1.1597]
 
 noise_level = noise_levels[noise_level_id - 1]

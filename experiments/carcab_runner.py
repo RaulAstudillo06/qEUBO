@@ -7,7 +7,7 @@ from botorch.settings import debug
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -31,15 +31,15 @@ def obj_func(X: Tensor) -> Tensor:
 
 
 # Algos
-# algo = "Random"
-# algo = "EMOV"
-algo = "EI"
-# algo = "NEI"
-# algo = "TS"
-# algo = "PKG"
+# algo = "random"
+# algo = "analytic_eubo"
+algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+# algo = "ts"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -53,8 +53,6 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_level = 0.0672
 elif comp_noise_type == "logit":
     noise_level = 0.0558
 
@@ -74,9 +72,9 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=2 * (input_dim + 1),
+    num_init_queries=4 * input_dim,
     num_max_iter=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )

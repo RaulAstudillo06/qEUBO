@@ -8,7 +8,7 @@ from botorch.test_functions.synthetic import Hartmann
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -20,23 +20,25 @@ from src.get_noise_level import get_noise_level
 
 
 # Objective function
+input_dim = 6
+
+
 def obj_func(X: Tensor) -> Tensor:
     hartmann = Hartmann()
     objective_X = -hartmann.evaluate_true(X)
     return objective_X
 
 
-input_dim = 6
-
 # Algos
-# algo = "Random"
-algo = "EMOV"
-# algo = "EI"
-# algo = "NEI"
-# algo = "TS"
+# algo = "random"
+# algo = "analytic_eubo"
+algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+# algo = "ts"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -50,8 +52,6 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_levels = [0.0817, 0.1928, 0.3768]
 elif comp_noise_type == "logit":
     noise_levels = [0.0673, 0.1619, 0.3242]
 
@@ -74,8 +74,8 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=4 * input_dim,
-    num_max_iter=200,
+    num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )

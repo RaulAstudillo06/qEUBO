@@ -8,8 +8,8 @@ from botorch.test_functions.synthetic import Ackley
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
-debug._set_state(True)
+torch.autograd.set_detect_anomaly(False)
+debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
 print(script_dir[:-12])
@@ -31,12 +31,12 @@ def obj_func(X: Tensor) -> Tensor:
 
 
 # Algos
-# algo = "Random"
-algo = "EMOV"
-# algo = "EI"
-# algo = "NEI"
-# algo = "TS"
-# algo = "PKG"
+# algo = "random"
+# algo = "analytic_eubo"
+algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+# algo = "ts"
 
 # estimate noise level
 comp_noise_type = "logit"
@@ -53,9 +53,7 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_levels = [0.0682, 0.1696, 0.3444]
-elif comp_noise_type == "logit":
+if comp_noise_type == "logit":
     noise_levels = [0.0575, 0.1416, 0.2943]
 
 noise_level = noise_levels[noise_level_id - 1]
@@ -80,5 +78,5 @@ experiment_manager(
     num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )

@@ -14,17 +14,20 @@ from botorch.utils.transforms import (
 from torch import Tensor
 
 
-class ExpectedMaxObjectiveValue(AcquisitionFunction):
+class ExpectedUtilityOfBestOption(AcquisitionFunction):
     r""""""
 
     def __init__(
         self,
         model: Model,
     ) -> None:
-        r"""Analytic Expected Max Objective Value.
+        r"""Analytic Expected Utility of the Best Option (EUBO).
+
+        Only supports the case of `q=1`. The model must be
+        single-outcome.
 
         Args:
-            model (Model): .
+            model: A fitted single-outcome model.
         """
         super().__init__(model=model)
         self.standard_normal = torch.distributions.normal.Normal(
@@ -34,7 +37,7 @@ class ExpectedMaxObjectiveValue(AcquisitionFunction):
 
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate PreferentialOneStepLookahead on the candidate set X.
+        r"""Evaluate EUBO on the candidate set X.
         Args:
             X: A `batch_shape x 2 x d`-dim Tensor.
         Returns:
@@ -56,7 +59,7 @@ class ExpectedMaxObjectiveValue(AcquisitionFunction):
         return acqf_val
 
 
-class qExpectedMaxObjectiveValue(MCAcquisitionFunction):
+class qExpectedUtilityOfBestOption(MCAcquisitionFunction):
     r""" """
 
     def __init__(
@@ -66,14 +69,18 @@ class qExpectedMaxObjectiveValue(MCAcquisitionFunction):
         objective: Optional[MCAcquisitionObjective] = None,
         X_pending: Optional[Tensor] = None,
     ) -> None:
-        r"""q-Preferential Noisy Expected Improvement.
+        r"""MC-based Expected Utility of the Best Option (qEUBO).
 
         Args:
-            outcome_model (Model): .
-            pref_model (Model): .
-            sampler (Optional[MCSampler], optional): . Defaults to None.
-            objective (Optional[MCAcquisitionObjective], optional): . Defaults to None.
-            X_pending (Optional[Tensor], optional): . Defaults to None.
+            model: A fitted model.
+             sampler: The sampler used to draw base samples. See `MCAcquisitionFunction`
+                more details.
+            objective: The MCAcquisitionObjective under which the samples are evaluated.
+                Defaults to `IdentityMCObjective()`.
+            X_pending:  A `m x d`-dim Tensor of `m` design points that have been
+                submitted for function evaluation but have not yet been evaluated.
+                Concatenated into X upon forward call. Copied and set to have no
+                gradient.
         """
         super().__init__(
             model=model,
@@ -85,20 +92,20 @@ class qExpectedMaxObjectiveValue(MCAcquisitionFunction):
     @concatenate_pending_points
     @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
-        r"""Evaluate qNoisyExpectedImprovement on the candidate set `X`.
+        r"""Evaluate qEUBO on the candidate set `X`.
 
         Args:
             X: A `batch_shape x q x d`-dim Tensor of t-batches with `q` `d`-dim design
                 points each.
 
         Returns:
-            A `batch_shape'`-dim Tensor of Noisy Expected Improvement values at the
+            A `batch_shape'`-dim Tensor of qEUBO values at the
             given design points `X`, where `batch_shape'` is the broadcasted batch shape
             of model and input `X`.
         """
         posterior_X = self.model.posterior(X)
         Y_samples = self.sampler(posterior_X)
-        obj_val_samples = self.objective(Y_samples)
-        max_obj_val_samples = obj_val_samples.max(dim=-1).values
-        exp_max_obj_val = max_obj_val_samples.mean(dim=0)
-        return exp_max_obj_val
+        util_val_samples = self.objective(Y_samples)
+        best_util_val_samples = util_val_samples.max(dim=-1).values
+        exp_best_util_val = best_util_val_samples.mean(dim=0)
+        return exp_best_util_val

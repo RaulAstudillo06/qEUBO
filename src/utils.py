@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
-from botorch.fit import fit_gpytorch_mll, fit_gpytorch_mll_scipy
+from botorch.fit import fit_gpytorch_mll
 from botorch.optim.initializers import gen_batch_initial_conditions
 from botorch.optim.optimize import optimize_acqf
 from gpytorch.mlls.variational_elbo import VariationalELBO
@@ -12,7 +12,7 @@ from torch import Tensor
 from torch.distributions import Bernoulli, Normal, Gumbel
 
 
-from src.acquisition_functions.emov import ExpectedMaxObjectiveValue
+from src.acquisition_functions.eubo import ExpectedUtilityOfBestOption
 from src.models.likelihoods.pairwise import (
     PairwiseProbitLikelihood,
     PairwiseLogitLikelihood,
@@ -64,7 +64,7 @@ def fit_model(
         model = PreferentialVariationalGP(queries, responses)
         model.train()
         model.likelihood.train()
-        if True:
+        if False:
             #######################
             training_iterations = 400
             # Use the adam optimizer
@@ -83,13 +83,13 @@ def fit_model(
                 optimizer.zero_grad()
                 # Get predictive output
                 output = model(train_x)
-                # print(model.covar_module.raw_outputscale)
+                print(model.covar_module.raw_outputscale)
                 # print(train_y)
                 # print(output.mean)
                 # Calc loss and backprop gradients
                 loss = -mll(output, train_y)
                 loss.backward()
-                if False:
+                if True:
                     print(
                         "Iter %d/%d - Loss: %.3f"
                         % (i + 1, training_iterations, loss.item())
@@ -103,19 +103,19 @@ def fit_model(
                 num_data=2 * model.num_data,
             )
             mll = fit_gpytorch_mll(mll)
+            model.covar_module.raw_outputscale
         model.eval()
         model.likelihood.eval()
-        # print(model.state_dict())
-    print(model.state_dict())
-    train_y = responses.squeeze(-1)
+    # print(model.state_dict())
+    # train_y = responses.squeeze(-1)
     # print(train_y)
     # print(model.variational_strategy.inducing_points.shape)
-    mean = model.posterior(queries).mean.squeeze()
+    # mean = model.posterior(queries).mean.squeeze()
     # train_x = queries.reshape(queries.shape[0] * queries.shape[1], queries.shape[2])
     # mean = model.posterior(train_x + 1.0).mean.squeeze()
-    mean_diff = mean[..., 0] - mean[..., 1]
-    predicted_pref = torch.where(mean_diff > 0.0, 0, 1)
-    print(train_y - predicted_pref)
+    # mean_diff = mean[..., 0] - mean[..., 1]
+    # predicted_pref = torch.where(mean_diff > 0.0, 0, 1)
+    # print(train_y - predicted_pref)
     return model
 
 
@@ -299,7 +299,7 @@ def get_eubo_init_for_pkg(model, pkg_acqf, bounds, num_restarts, raw_samples):
     )
     max_post_mean_func = max_post_mean_func.squeeze(0)
 
-    emov_acqf = ExpectedMaxObjectiveValue(model=model)
+    emov_acqf = ExpectedUtilityOfBestOption(model=model)
 
     max_emov_acqf = optimize_acqf_and_get_suggested_query(
         acq_func=emov_acqf,
