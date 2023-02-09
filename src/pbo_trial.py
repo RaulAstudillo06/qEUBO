@@ -391,8 +391,8 @@ def compute_obj_val_at_max_post_mean(
 ) -> Tensor:
 
     standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = 4 * input_dim
-    raw_samples = 120 * input_dim
+    num_restarts = 6 * input_dim
+    raw_samples = 180 * input_dim
 
     post_mean_func = PosteriorMean(model=model)
     max_post_mean_func = optimize_acqf_and_get_suggested_query(
