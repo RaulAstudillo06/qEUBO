@@ -5,6 +5,11 @@ import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
 from botorch.fit import fit_gpytorch_mll
+from botorch.models.likelihoods.pairwise import (
+    PairwiseLogitLikelihood,
+    PairwiseProbitLikelihood,
+)
+from botorch.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from botorch.optim.initializers import gen_batch_initial_conditions
 from botorch.optim.optimize import optimize_acqf
 from gpytorch.mlls.variational_elbo import VariationalELBO
@@ -13,11 +18,6 @@ from torch.distributions import Bernoulli, Normal, Gumbel
 
 
 from src.acquisition_functions.eubo import ExpectedUtilityOfBestOption
-from src.models.likelihoods.pairwise import (
-    PairwiseProbitLikelihood,
-    PairwiseLogitLikelihood,
-)
-from src.models.pairwise_gp import PairwiseGP, PairwiseLaplaceMarginalLogLikelihood
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.models.preferential_variational_gp import PreferentialVariationalGP
 from src.models.top_choice_gp import (
@@ -32,15 +32,14 @@ def fit_model(
     model_type: str,
     likelihood: Optional[str] = "logit",
 ):
-    # model_type = "pairwise_kernel_variational_gp"
     if model_type == "pairwise_gp":
         datapoints, comparisons = training_data_for_pairwise_gp(queries, responses)
 
         if queries.shape[1] == 2:
-            if likelihood == "probit":
-                likelihood_func = PairwiseProbitLikelihood()
-            else:
+            if likelihood == "logit":
                 likelihood_func = PairwiseLogitLikelihood()
+            elif likelihood == "probit":
+                likelihood_func = PairwiseProbitLikelihood()
             model = PairwiseGP(
                 datapoints,
                 comparisons,

@@ -1,9 +1,9 @@
 import torch
 from botorch.acquisition.analytic import PosteriorMean
+from botorch.models.pairwise_gp import PairwiseGP
 from botorch.utils.gp_sampling import get_gp_samples
 from copy import copy, deepcopy
 
-from src.models.pairwise_gp import PairwiseGP
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
 from src.models.preferential_variational_gp import PreferentialVariationalGP
 from src.models.top_choice_gp import TopChoiceGP
