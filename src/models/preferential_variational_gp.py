@@ -2,10 +2,12 @@ import torch
 
 from botorch.models.gpytorch import GPyTorchModel
 from botorch.utils.sampling import draw_sobol_samples
+from gpytorch.constraints import GreaterThan, Interval
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.kernels import RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ApproximateGP
+from gpytorch.priors.smoothed_box_prior import SmoothedBoxPrior
 from gpytorch.priors.torch_priors import GammaPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
@@ -67,13 +69,36 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
         # Mean and cov
         self.mean_module = ConstantMean()
         scales = bounds[1, :] - bounds[0, :]
-        self.covar_module = ScaleKernel(
-            RBFKernel(
-                ard_num_dims=self.input_dim,
-                lengthscale_prior=GammaPrior(3.0, 6.0 / scales),
-            ),
-            outputscale_prior=GammaPrior(2.0, 0.15),
-        )
+
+        use_pairwise_gp_covar = True
+        if use_pairwise_gp_covar:
+            os_lb, os_ub = 1e-2, 1e2
+            ls_prior = GammaPrior(1.2, 0.5)
+            ls_prior_mode = (ls_prior.concentration - 1) / ls_prior.rate
+            self.covar_module = ScaleKernel(
+                RBFKernel(
+                    ard_num_dims=self.input_dim,
+                    lengthscale_prior=ls_prior,
+                    lengthscale_constraint=GreaterThan(
+                        lower_bound=1e-4, transform=None, initial_value=ls_prior_mode
+                    ),
+                ),
+                outputscale_prior=SmoothedBoxPrior(a=os_lb, b=os_ub),
+                # make sure we won't get extreme values for the output scale
+                outputscale_constraint=Interval(
+                    lower_bound=os_lb * 0.5,
+                    upper_bound=os_ub * 2.0,
+                    initial_value=1.0,
+                ),
+            )
+        else:
+            self.covar_module = ScaleKernel(
+                RBFKernel(
+                    ard_num_dims=self.input_dim,
+                    lengthscale_prior=GammaPrior(3.0, 6.0 / scales),
+                ),
+                outputscale_prior=GammaPrior(2.0, 0.15),
+            )
         self._num_outputs = 1
         self.train_inputs = (train_x,)
         self.train_targets = train_y
