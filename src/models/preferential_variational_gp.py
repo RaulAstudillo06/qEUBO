@@ -70,7 +70,7 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
         self.mean_module = ConstantMean()
         scales = bounds[1, :] - bounds[0, :]
 
-        use_pairwise_gp_covar = True
+        use_pairwise_gp_covar = False
         if use_pairwise_gp_covar:
             os_lb, os_ub = 1e-2, 1e2
             ls_prior = GammaPrior(1.2, 0.5)
