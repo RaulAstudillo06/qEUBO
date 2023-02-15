@@ -40,9 +40,9 @@ responses = torch.tensor(np.array(responses))
 aux_model = PreferentialVariationalGP(queries, responses)
 animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict")
 aux_model.load_state_dict(animation_surrogate_state_dict, strict=False)
-print(aux_model(torch.tensor(datapoints)))
+print(aux_model(torch.tensor(datapoints)).mean)
 aux_model.eval()
-print(aux_model(torch.tensor(datapoints)))
+print(aux_model(torch.tensor(datapoints)).mean)
 
 N = 1000
 
@@ -62,10 +62,10 @@ def obj_func(X: Tensor) -> Tensor:
 # Algos
 # algo = "random"
 # algo = "analytic_eubo"
-# algo = "eubo"
+algo = "eubo"
 # algo = "ei"
 # algo = "nei"
-algo = "ts"
+# algo = "ts"
 
 # estimate noise level
 comp_noise_type = "logit"
@@ -83,8 +83,9 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "logit":
-    noise_levels = [0.1916, 0.3051, 0.9254]
-    noise_level = noise_levels[noise_level_id - 1]
+    # noise_levels = #[0.1916, 0.3051, 0.9254]
+    # noise_level = noise_levels[noise_level_id - 1]
+    noise_level = 0.0529
 
 # Run experiment
 if len(sys.argv) == 3:
