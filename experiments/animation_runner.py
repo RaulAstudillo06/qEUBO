@@ -1,6 +1,4 @@
 import numpy as np
-from sklearn import svm
-from sklearn.gaussian_process.kernels import RBF
 import os
 import sys
 import torch
@@ -20,6 +18,7 @@ data_folder = project_path + "/experiments/animation/data/"
 
 from src.experiment_manager import experiment_manager
 from src.get_noise_level import get_noise_level
+from src.models.preferential_variational_gp import PreferentialVariationalGP
 
 
 # Objective function
@@ -28,75 +27,49 @@ input_dim = 5
 datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
 comparisons = np.loadtxt(data_folder + "responses.txt")
 n_queries = comparisons.shape[0]
+queries = []
+responses = []
 
-K = RBF(length_scale=0.2)
-
-
-def my_kernel(x, y):
-    a = x[:5].reshape(1, -1)
-    b = x[5:].reshape(1, -1)
-    c = y[:5].reshape(1, -1)
-    d = y[5:].reshape(1, -1)
-    return K(a, c) - K(a, d) - K(b, c) + K(b, d)
-
-
-def proxy_kernel(X, Y):
-    """Another function to return the gram_matrix,
-    which is needed in SVC's kernel or fit
-    """
-    gram_matrix = np.zeros((len(X), len(Y)))
-    for i, x in enumerate(X):
-        for j, y in enumerate(Y):
-            gram_matrix[i, j] = my_kernel(x, y)
-    return gram_matrix
-
-
-inputs = []
-labels = []
 for i in range(n_queries):
-    inputs.append(datapoints[2 * i : 2 * (i + 1), :].flatten())
-    labels.append(0 if comparisons[i, 0] < comparisons[i, 1] else 1)
+    queries.append(datapoints[2 * i : 2 * (i + 1), :])
+    responses.append(0 if comparisons[i, 0] < comparisons[i, 1] else 1)
 
-aux_model = svm.SVC(kernel=proxy_kernel)
-aux_model.fit(inputs, labels)
+queries = torch.tensor(np.array(queries))
+responses = torch.tensor(np.array(responses))
 
-print(
-    aux_model.decision_function(np.asarray([0.1 * i for i in range(10)]).reshape(1, -1))
-)
+aux_model = PreferentialVariationalGP(queries, responses)
+animation_surrogate_state_dict = torch.load("animation_surrogate_state_dict")
+aux_model.load_state_dict(animation_surrogate_state_dict, strict=False)
+print(aux_model(torch.tensor(datapoints)))
+aux_model.eval()
+print(aux_model(torch.tensor(datapoints)))
 
 N = 1000
 
 
 def obj_func(X: Tensor) -> Tensor:
-    reference_point = torch.zeros(size=X.size()) + 0.5
-    X_aux = torch.cat([X, reference_point], dim=-1)
     if X.shape[0] > N:
         n_batches = int(X.shape[0] / N)
         objective_X = []
         for i in range(n_batches):
-            objective_X.append(
-                torch.tensor(
-                    aux_model.decision_function(X_aux[i * N : (i + 1) * N, ...].numpy())
-                )
-            )
+            objective_X.append(aux_model(X[i * N : (i + 1) * N, ...]).mean.detach())
         objective_X = torch.cat(objective_X, dim=0)
     else:
-        objective_X = torch.tensor(aux_model.decision_function(X_aux.numpy()))
-    objective_X = 10 * objective_X
+        objective_X = aux_model(X).mean.detach()
     return objective_X
 
 
 # Algos
-algo = "Random"
-# algo = "EMOV"
-# algo = "EI"
-# algo = "NEI"
-# algo = "TS"
-# algo = "PKG"
+# algo = "random"
+# algo = "analytic_eubo"
+# algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+algo = "ts"
 
 # estimate noise level
 comp_noise_type = "logit"
-noise_level_id = 3
+noise_level_id = 2
 
 if False:
     noise_level = get_noise_level(
@@ -109,9 +82,7 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_level = 0.0
-elif comp_noise_type == "logit":
+if comp_noise_type == "logit":
     noise_levels = [0.1916, 0.3051, 0.9254]
     noise_level = noise_levels[noise_level_id - 1]
 
@@ -131,9 +102,9 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=5 * input_dim,
+    num_init_queries=4 * input_dim,
     num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )
