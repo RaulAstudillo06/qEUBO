@@ -346,6 +346,8 @@ def get_new_suggested_query(
             X_baseline = X_baseline.view(
                 (X_baseline.shape[0] * X_baseline.shape[1], X_baseline.shape[2])
             )
+        elif model_type == "preferential_variational_gp":
+            X_baseline = model.train_inputs[0]
         acquisition_function = qNoisyExpectedImprovement(
             model=model,
             X_baseline=X_baseline,
