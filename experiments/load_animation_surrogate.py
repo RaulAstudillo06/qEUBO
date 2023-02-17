@@ -5,6 +5,7 @@ import torch
 
 from botorch.models.likelihoods.pairwise import PairwiseLogitLikelihood
 from botorch.models.pairwise_gp import PairwiseGP
+from gpytorch.kernels import RBFKernel, ScaleKernel
 
 torch.set_default_dtype(torch.float64)
 
@@ -45,10 +46,12 @@ def load_animation_surrogate(surrogate_id):
 
     elif surrogate_id == "pairwisegp":
         likelihood_func = PairwiseLogitLikelihood()
+        covar_module = ScaleKernel(RBFKernel(ard_num_dims=datapoints.shape[-1]))
         surrogate_aux_model = PairwiseGP(
             datapoints,
             comparisons,
             likelihood=likelihood_func,
+            covar_module=covar_module,
             jitter=1e-4,
         )
         animation_surrogate_state_dict = torch.load(
