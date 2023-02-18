@@ -98,7 +98,7 @@ algo = "eubo"
 comp_noise_type = "logit"
 noise_level_id = 2
 
-if False:
+if True:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
@@ -110,8 +110,9 @@ if False:
     print(noise_level)
 
 if comp_noise_type == "logit":
-    noise_levels = [0.1916, 0.3051, 0.9254]
-    noise_level = noise_levels[noise_level_id - 1]
+    # noise_levels = [0.1916, 0.3051, 0.9254]
+    # noise_level = noise_levels[noise_level_id - 1]
+    noise_level = 0.446
 
 # Run experiment
 if len(sys.argv) == 3:
