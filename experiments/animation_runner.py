@@ -29,7 +29,7 @@ datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
 comparisons = np.loadtxt(data_folder + "responses.txt")
 n_queries = comparisons.shape[0]
 
-K = RBF(length_scale=0.4)
+K = RBF(length_scale=0.2)
 
 
 def my_kernel(x, y):
@@ -98,7 +98,7 @@ algo = "eubo"
 comp_noise_type = "logit"
 noise_level_id = 2
 
-if True:
+if False:
     noise_level = get_noise_level(
         obj_func,
         input_dim,
@@ -110,9 +110,8 @@ if True:
     print(noise_level)
 
 if comp_noise_type == "logit":
-    # noise_levels = [0.1916, 0.3051, 0.9254]
-    # noise_level = noise_levels[noise_level_id - 1]
-    noise_level = 0.446
+    noise_levels = [0.1916, 0.3051, 0.9254]
+    noise_level = noise_levels[noise_level_id - 1]
 
 # Run experiment
 if len(sys.argv) == 3:
