@@ -29,7 +29,7 @@ datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
 comparisons = np.loadtxt(data_folder + "responses.txt")
 n_queries = comparisons.shape[0]
 
-K = RBF(length_scale=0.2)
+K = RBF(length_scale=0.4)
 
 
 def my_kernel(x, y):
@@ -133,5 +133,5 @@ experiment_manager(
     num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )
