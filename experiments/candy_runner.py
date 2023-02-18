@@ -7,14 +7,14 @@ from botorch.settings import debug
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
-torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(False)
 debug._set_state(False)
 
 script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
-print(script_dir[:-12])
-sys.path.append(script_dir[:-12])
+project_path = script_dir[:-12]
+sys.path.append(project_path)
 
-from experiments.evalset.test_funcs import Candy
+from evalset.test_funcs import Candy
 from src.experiment_manager import experiment_manager
 from src.get_noise_level import get_noise_level
 
@@ -30,15 +30,15 @@ def obj_func(X: Tensor) -> Tensor:
 
 
 # Algos
-# algo = "Random"
-# algo = "EMOV"
-algo = "EI"
-# algo = "NEI"
-# algo = "TS"
-# algo = "PKG"
+# algo = "random"
+# algo = "analytic_eubo"
+# algo = "eubo"
+# algo = "ei"
+# algo = "nei"
+algo = "ts"
 
 # estimate noise level
-comp_noise_type = "probit"
+comp_noise_type = "logit"
 noise_level_id = 2
 
 if False:
@@ -52,9 +52,7 @@ if False:
     )
     print(noise_level)
 
-if comp_noise_type == "probit":
-    noise_level = 0.0213
-elif comp_noise_type == "logit":
+if comp_noise_type == "logit":
     noise_level = 0.0179
 
 # Run experiment
@@ -73,9 +71,9 @@ experiment_manager(
     comp_noise=noise_level,
     algo=algo,
     batch_size=2,
-    num_init_queries=2 * (input_dim + 1),
-    num_max_iter=100,
+    num_init_queries=4 * input_dim,
+    num_algo_queries=200,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=False,
+    restart=True,
 )
