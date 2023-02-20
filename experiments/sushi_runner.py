@@ -32,10 +32,11 @@ def obj_func(X: Tensor) -> Tensor:
 # Algos
 # algo = "random"
 # algo = "analytic_eubo"
-algo = "eubo"
+# algo = "eubo"
 # algo = "ei"
 # algo = "nei"
 # algo = "ts"
+algo = "mpes"
 
 # estimate noise level
 comp_noise_type = "logit"
@@ -76,7 +77,7 @@ experiment_manager(
     algo=algo,
     batch_size=2,
     num_init_queries=4 * input_dim,
-    num_algo_queries=200,
+    num_algo_queries=150,
     first_trial=first_trial,
     last_trial=last_trial,
     restart=True,
