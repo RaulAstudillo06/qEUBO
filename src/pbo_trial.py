@@ -20,6 +20,7 @@ from src.acquisition_functions.eubo import (
     ExpectedUtilityOfBestOption,
     qExpectedUtilityOfBestOption,
 )
+from src.acquisition_functions.mpes import MultinomialPredictiveEntropySearch
 from src.acquisition_functions.thompson_sampling import gen_thompson_sampling_query
 from src.utils import (
     fit_model,
@@ -319,6 +320,12 @@ def get_new_suggested_query(
         sampler = SobolQMCNormalSampler(sample_shape=64)
         acquisition_function = qExpectedUtilityOfBestOption(
             model=model, sampler=sampler
+        )
+    elif algo == "mpes":
+        standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
+        acquisition_function = MultinomialPredictiveEntropySearch(
+            model=model,
+            bounds=standard_bounds,
         )
     elif algo == "ei":
         sampler = SobolQMCNormalSampler(sample_shape=64)
