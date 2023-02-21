@@ -18,8 +18,8 @@ class MultinomialPredictiveEntropySearch(MCAcquisitionFunction):
         self,
         model: Model,
         bounds: Tensor,
-        n_samples: int = 1024,
-        n_x_max_samples: int = 64,
+        n_samples: int = 512,
+        n_x_max_samples: int = 32,
         **kwargs: Any,
     ) -> None:
         self.bounds = bounds
@@ -35,7 +35,7 @@ class MultinomialPredictiveEntropySearch(MCAcquisitionFunction):
     def gen_X_max_cand_samples(self):
         with torch.no_grad():
             dim = self.bounds.shape[-1]
-            n_x_max_subsamples = min(1024, 256 * dim)
+            n_x_max_subsamples = 512
             X_max_candidates = torch.rand(self.n_x_max_samples, n_x_max_subsamples, dim)
             X_max_candidates = (
                 X_max_candidates * (self.bounds[..., 1, :] - self.bounds[..., 0, :])
