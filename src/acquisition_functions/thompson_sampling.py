@@ -5,7 +5,7 @@ from botorch.utils.gp_sampling import get_gp_samples
 from copy import copy, deepcopy
 
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
-from src.models.preferential_variational_gp import PreferentialVariationalGP
+from src.models.variational_preferential_gp import VariationalPreferentialGP
 from src.models.top_choice_gp import TopChoiceGP
 from src.utils import (
     optimize_acqf_and_get_suggested_query,
@@ -59,7 +59,7 @@ def get_pairwise_gp_rff_sample(model, n_samples):
 
         adapted_model.likelihood = LikelihoodForRFF()
 
-    elif isinstance(model, PreferentialVariationalGP):
+    elif isinstance(model, VariationalPreferentialGP):
         adapted_model = copy(model)
         queries_items = adapted_model.train_inputs[0]
         use_mean = False

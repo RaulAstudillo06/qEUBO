@@ -1,13 +1,16 @@
-import torch
+#!/usr/bin/env python3
 
+from __future__ import annotations
+
+from typing import Optional
+
+import torch
 from botorch.models.gpytorch import GPyTorchModel
 from botorch.utils.sampling import draw_sobol_samples
-from gpytorch.constraints import GreaterThan, Interval
 from gpytorch.distributions import MultivariateNormal
-from gpytorch.kernels import RBFKernel, ScaleKernel
+from gpytorch.kernels import Kernel, RBFKernel, ScaleKernel
 from gpytorch.means import ConstantMean
 from gpytorch.models import ApproximateGP
-from gpytorch.priors.smoothed_box_prior import SmoothedBoxPrior
 from gpytorch.priors.torch_priors import GammaPrior
 from gpytorch.variational import (
     CholeskyVariationalDistribution,
@@ -21,29 +24,44 @@ from src.models.likelihoods.preferential_softmax_likelihood import (
 )
 
 
-class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
+class VariationalPreferentialGP(GPyTorchModel, ApproximateGP):
     def __init__(
         self,
         queries: Tensor,
         responses: Tensor,
         use_withening: bool = True,
+        covar_module: Optional[Kernel] = None,
     ) -> None:
+        r"""
+        Args:
+            queries: A `n x q x d` tensor of training inputs. Each of the `n` queries is constituted
+                by `q` `d`-dimensional decision vectors.
+            responses: A `n x 1` tensor of training outputs. Each of the `n` responses is an integer
+                between 0 and `q-1` indicating the decision vector selected by the user.
+            use_withening: If true, use withening to enhance variational inference.
+            covar_module: The module computing the covariance matrix.
+        """
         self.queries = queries
         self.responses = responses
         self.input_dim = queries.shape[-1]
         self.q = queries.shape[-2]
         self.num_data = queries.shape[-3]
-        train_x = queries.reshape(queries.shape[0] * queries.shape[1], queries.shape[2])
-        train_y = responses.squeeze(-1)
+        train_x = queries.reshape(
+            queries.shape[0] * queries.shape[1], queries.shape[2]
+        )  # Reshape queries in the form of "standard training inputs"
+        train_y = responses.squeeze(-1)  # Squeeze out output dimension
         bounds = torch.tensor(
             [[0, 1] for _ in range(self.input_dim)], dtype=torch.double
-        ).T
+        ).T  # This assumes the input space has been normalized beforehand
+        # Construct variational distribution and strategy
         if use_withening:
             inducing_points = draw_sobol_samples(
-                bounds=bounds, n=2 * self.input_dim, q=1
+                bounds=bounds,
+                n=2 * self.input_dim,
+                q=1,
+                seed=0,
             ).squeeze(1)
             inducing_points = torch.cat([inducing_points, train_x], dim=0)
-            # Construct variational dist/strat
             variational_distribution = CholeskyVariationalDistribution(
                 inducing_points.size(-2)
             )
@@ -66,32 +84,10 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
             )
         super().__init__(variational_strategy)
         self.likelihood = PreferentialSoftmaxLikelihood(num_points=self.q)
-        # Mean and cov
         self.mean_module = ConstantMean()
         scales = bounds[1, :] - bounds[0, :]
 
-        use_pairwise_gp_covar = False
-        if use_pairwise_gp_covar:
-            os_lb, os_ub = 1e-2, 1e2
-            ls_prior = GammaPrior(1.2, 0.5)
-            ls_prior_mode = (ls_prior.concentration - 1) / ls_prior.rate
-            self.covar_module = ScaleKernel(
-                RBFKernel(
-                    ard_num_dims=self.input_dim,
-                    lengthscale_prior=ls_prior,
-                    lengthscale_constraint=GreaterThan(
-                        lower_bound=1e-4, transform=None, initial_value=ls_prior_mode
-                    ),
-                ),
-                outputscale_prior=SmoothedBoxPrior(a=os_lb, b=os_ub),
-                # make sure we won't get extreme values for the output scale
-                outputscale_constraint=Interval(
-                    lower_bound=os_lb * 0.5,
-                    upper_bound=os_ub * 2.0,
-                    initial_value=1.0,
-                ),
-            )
-        else:
+        if covar_module is None:
             self.covar_module = ScaleKernel(
                 RBFKernel(
                     ard_num_dims=self.input_dim,
@@ -99,6 +95,8 @@ class PreferentialVariationalGP(GPyTorchModel, ApproximateGP):
                 ),
                 outputscale_prior=GammaPrior(2.0, 0.15),
             )
+        else:
+            self.covar_module = covar_module
         self._num_outputs = 1
         self.train_inputs = (train_x,)
         self.train_targets = train_y

@@ -19,7 +19,7 @@ from torch.distributions import Bernoulli, Normal, Gumbel
 
 from src.acquisition_functions.eubo import ExpectedUtilityOfBestOption
 from src.models.pairwise_kernel_variational_gp import PairwiseKernelVariationalGP
-from src.models.preferential_variational_gp import PreferentialVariationalGP
+from src.models.variational_preferential_gp import VariationalPreferentialGP
 from src.models.top_choice_gp import (
     TopChoiceGP,
     TopChoiceLaplaceMarginalLogLikelihood,
@@ -60,7 +60,7 @@ def fit_model(
         model = PairwiseKernelVariationalGP(queries, responses)
         model.eval()
     elif model_type == "preferential_variational_gp":
-        model = PreferentialVariationalGP(queries, responses)
+        model = VariationalPreferentialGP(queries, responses)
         model.train()
         model.likelihood.train()
         if False:
