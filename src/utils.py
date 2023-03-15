@@ -102,7 +102,7 @@ def fit_model(
                 num_data=2 * model.num_data,
             )
             mll = fit_gpytorch_mll(mll)
-            model.covar_module.raw_outputscale
+            # print(model.covar_module.raw_outputscale)
         model.eval()
         model.likelihood.eval()
     # print(model.state_dict())
@@ -133,7 +133,7 @@ def generate_initial_data(
     queries = generate_random_queries(num_queries, batch_size, input_dim, seed)
     if add_baseline_point:
         queries_against_baseline = generate_queries_against_baseline(
-            100, batch_size, input_dim, obj_func, seed
+            30, batch_size, input_dim, obj_func, seed
         )
         queries = torch.cat([queries, queries_against_baseline], dim=0)
     obj_vals = get_obj_vals(queries, obj_func)
@@ -158,7 +158,7 @@ def generate_random_queries(
 def generate_queries_against_baseline(
     num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
 ):
-    baseline_point = torch.tensor([0.52] * input_dim)  # may try 0.51 too
+    baseline_point = torch.tensor([0.51] * input_dim)
     queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
     queries = torch.cat([baseline_point.expand_as(queries), queries], dim=1)
     return queries
