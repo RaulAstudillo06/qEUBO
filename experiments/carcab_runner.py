@@ -1,9 +1,9 @@
+#!/usr/bin/env python3
+
 import os
 import sys
 import torch
-
 from botorch.settings import debug
-
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
@@ -16,7 +16,6 @@ sys.path.append(script_dir[:-12])
 
 from experiments.problems import car_cab_obj_func, CarCabDesign
 from src.experiment_manager import experiment_manager
-from src.get_noise_level import get_noise_level
 
 
 # Objective function
@@ -33,28 +32,16 @@ def obj_func(X: Tensor) -> Tensor:
 # Algos
 # algo = "random"
 # algo = "analytic_eubo"
-algo = "eubo"
-# algo = "ei"
-# algo = "nei"
-# algo = "ts"
+algo = "qeubo"
+# algo = "qei"
+# algo = "qnei"
+# algo = "qts"
+# algo = "mpes"
 
-# estimate noise level
-comp_noise_type = "logit"
+# Noise level
+noise_type = "logit"
 noise_level_id = 2
-
-if False:
-    noise_level = get_noise_level(
-        obj_func,
-        input_dim,
-        target_error=0.1 * float(noise_level_id),
-        top_proportion=0.01,
-        num_samples=10000000,
-        comp_noise_type=comp_noise_type,
-    )
-    print(noise_level)
-
-elif comp_noise_type == "logit":
-    noise_level = 0.0558
+noise_level = 0.0558
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -68,13 +55,13 @@ experiment_manager(
     problem="carcab",
     obj_func=obj_func,
     input_dim=input_dim,
-    comp_noise_type=comp_noise_type,
-    comp_noise=noise_level,
+    noise_type=noise_type,
+    noise_level=noise_level,
     algo=algo,
-    batch_size=2,
+    num_alternatives=2,
     num_init_queries=4 * input_dim,
-    num_max_iter=200,
+    num_max_iter=150,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=True,
+    restart=False,
 )

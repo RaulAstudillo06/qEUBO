@@ -1,12 +1,12 @@
+#!/usr/bin/env python3
+
 import numpy as np
 from sklearn import svm
 from sklearn.gaussian_process.kernels import RBF
 import os
 import sys
 import torch
-
 from botorch.settings import debug
-
 from torch import Tensor
 
 torch.set_default_dtype(torch.float64)
@@ -19,12 +19,10 @@ sys.path.append(project_path)
 data_folder = project_path + "/experiments/animation/data/"
 
 from src.experiment_manager import experiment_manager
-from src.get_noise_level import get_noise_level
 
 
 # Objective function
 input_dim = 5
-
 datapoints = np.loadtxt(data_folder + "datapoints_norm.txt")
 comparisons = np.loadtxt(data_folder + "responses.txt")
 n_queries = comparisons.shape[0]
@@ -89,29 +87,20 @@ def obj_func(X: Tensor) -> Tensor:
 # Algos
 # algo = "random"
 # algo = "analytic_eubo"
-algo = "eubo"
-# algo = "ei"
-# algo = "nei"
-# algo = "ts"
+algo = "qeubo"
+# algo = "qei"
+# algo = "qnei"
+# algo = "qts"
+# algo = "mpes"
 
-# estimate noise level
-comp_noise_type = "logit"
+# Noise level
+noise_type = "logit"
 noise_level_id = 2
 
-if False:
-    noise_level = get_noise_level(
-        obj_func,
-        input_dim,
-        target_error=0.1 * float(noise_level_id),
-        top_proportion=0.01,
-        num_samples=10000,
-        comp_noise_type=comp_noise_type,
-    )
-    print(noise_level)
-
-if comp_noise_type == "logit":
+if noise_type == "logit":
     noise_levels = [0.1916, 0.3051, 0.9254]
-    noise_level = noise_levels[noise_level_id - 1]
+
+noise_level = noise_levels[noise_level_id - 1]
 
 # Run experiment
 if len(sys.argv) == 3:
@@ -125,13 +114,13 @@ experiment_manager(
     problem="animation",
     obj_func=obj_func,
     input_dim=input_dim,
-    comp_noise_type=comp_noise_type,
-    comp_noise=noise_level,
+    noise_type=noise_type,
+    noise_level=noise_level,
     algo=algo,
-    batch_size=2,
+    num_alternatives=2,
     num_init_queries=4 * input_dim,
-    num_algo_queries=200,
+    num_algo_queries=150,
     first_trial=first_trial,
     last_trial=last_trial,
-    restart=True,
+    restart=False,
 )
