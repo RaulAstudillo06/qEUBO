@@ -83,7 +83,7 @@ class VariationalPreferentialGP(GPyTorchModel, ApproximateGP):
                 learn_inducing_locations=False,
             )
         super().__init__(variational_strategy)
-        self.likelihood = PreferentialSoftmaxLikelihood(num_points=self.q)
+        self.likelihood = PreferentialSoftmaxLikelihood(num_alternatives=self.q)
         self.mean_module = ConstantMean()
         scales = bounds[1, :] - bounds[0, :]
 

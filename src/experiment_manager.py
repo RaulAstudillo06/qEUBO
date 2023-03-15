@@ -1,7 +1,6 @@
-from typing import Callable, Dict, List, Optional
+#!/usr/bin/env python3
 
-import os
-import sys
+from typing import Callable, Dict, Optional
 
 from src.pbo_trial import pbo_trial
 
@@ -10,10 +9,10 @@ def experiment_manager(
     problem: str,
     obj_func: Callable,
     input_dim: int,
-    comp_noise_type: str,
-    comp_noise: float,
+    noise_type: str,
+    noise_level: float,
     algo: str,
-    batch_size: int,
+    num_alternatives: int,
     num_init_queries: int,
     num_algo_queries: int,
     first_trial: int,
@@ -24,17 +23,33 @@ def experiment_manager(
     ignore_failures: bool = False,
     algo_params: Optional[Dict] = None,
 ) -> None:
-
+    r"""
+    Args:
+        problem: Problem ID
+        obj_func: The decision-maker's latent utility function
+        input_dim: Input dimension
+        noise_type: Type of noise in the decision-maker's responses (options: logit and probit)
+        noise_level: Noise level
+        algo: Acquisition function
+        num_alternatives: Number of alternatives in each query
+        num_init_queries: Number of intial queries (chosen uniformly at random)
+        num_algo_queries: Number of queries to be chosen using the acquisition function
+        first_trial: First trial to be ran (This function runs all trials between first_trial and last_trial sequentially)
+        last_trial: Last trial to be ran
+        restart: If true, it will try to restart the experiment from available data
+        model_type: Type of model (see utils.py for options)
+        add_baseline_point: If true, it adds an initial set of queries against a "baseline point" (baseline point is hardcoded in utils.py)
+    """
     for trial in range(first_trial, last_trial + 1):
         pbo_trial(
             problem=problem,
             obj_func=obj_func,
             input_dim=input_dim,
-            comp_noise_type=comp_noise_type,
-            comp_noise=comp_noise,
+            noise_type=noise_type,
+            noise_level=noise_level,
             algo=algo,
             algo_params=algo_params,
-            batch_size=batch_size,
+            num_alternatives=num_alternatives,
             num_init_queries=num_init_queries,
             num_algo_queries=num_algo_queries,
             trial=trial,

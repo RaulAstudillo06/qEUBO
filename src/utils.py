@@ -1,6 +1,7 @@
+#!/usr/bin/env python3
+
 from typing import Optional
 
-import numpy as np
 import torch
 from botorch.acquisition import AcquisitionFunction, PosteriorMean
 from botorch.generation.gen import get_best_candidates
@@ -103,6 +104,7 @@ def fit_model(
             )
             mll = fit_gpytorch_mll(mll)
             # print(model.covar_module.raw_outputscale)
+        # Make sure model and likelihood are in eval mode
         model.eval()
         model.likelihood.eval()
     # print(model.state_dict())
@@ -120,68 +122,49 @@ def fit_model(
 
 def generate_initial_data(
     num_queries: int,
-    batch_size: int,
+    num_alternatives: int,
     input_dim: int,
     obj_func,
-    comp_noise_type,
-    comp_noise,
+    noise_type,
+    noise_level,
     add_baseline_point: bool,
     seed: int = None,
 ):
-    # generate initial data
-
-    queries = generate_random_queries(num_queries, batch_size, input_dim, seed)
-    if add_baseline_point:
+    queries = generate_random_queries(num_queries, num_alternatives, input_dim, seed)
+    if add_baseline_point:  # If true, this adds 30 queries including a
+        # "high-quality baseline point". The baseline point is hardcoded in generate_queries_against_baseline
         queries_against_baseline = generate_queries_against_baseline(
-            30, batch_size, input_dim, obj_func, seed
+            30, num_alternatives, input_dim, obj_func, seed
         )
         queries = torch.cat([queries, queries_against_baseline], dim=0)
     obj_vals = get_obj_vals(queries, obj_func)
-    responses = generate_responses(obj_vals, comp_noise_type, comp_noise)
+    responses = generate_responses(obj_vals, noise_type, noise_level)
     return queries, obj_vals, responses
 
 
 def generate_random_queries(
-    num_queries: int, batch_size: int, input_dim: int, seed: int = None
+    num_queries: int, num_alternatives: int, input_dim: int, seed: int = None
 ):
-    # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
+    # Generate `num_queries` queries each constituted by `num_alternatives` points chosen uniformly at random
     if seed is not None:
         old_state = torch.random.get_rng_state()
         torch.manual_seed(seed)
-        queries = torch.rand([num_queries, batch_size, input_dim])
+        queries = torch.rand([num_queries, num_alternatives, input_dim])
         torch.random.set_rng_state(old_state)
     else:
-        queries = torch.rand([num_queries, batch_size, input_dim])
+        queries = torch.rand([num_queries, num_alternatives, input_dim])
     return queries
 
 
 def generate_queries_against_baseline(
-    num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
+    num_queries: int, num_alternatives: int, input_dim: int, obj_func, seed: int = None
 ):
-    baseline_point = torch.tensor([0.51] * input_dim)
-    queries = generate_random_queries(num_queries, batch_size - 1, input_dim, seed + 2)
-    queries = torch.cat([baseline_point.expand_as(queries), queries], dim=1)
-    return queries
-
-
-def generate_queries_against_baseline2(
-    num_queries: int, batch_size: int, input_dim: int, obj_func, seed: int = None
-):
-    # generate `num_queries` queries each constituted by `batch_size` points chosen uniformly at random
-    random_queries = generate_random_queries(
-        num_queries=5 * (2**input_dim),
-        batch_size=batch_size,
-        input_dim=input_dim,
-        seed=seed + 1,
+    baseline_point = torch.tensor([0.51] * input_dim)  # This baseline point was meant
+    # to be used with the Alpine1 function (with normalized input space) exclusively
+    queries = generate_random_queries(
+        num_queries, num_alternatives - 1, input_dim, seed + 2
     )
-    random_queries = 0.1 * random_queries + 0.2
-    obj_vals = get_obj_vals(random_queries, obj_func)
-    argmax_obj_vals = np.unravel_index(np.argmax(obj_vals), obj_vals.shape)
-    best_point = torch.tensor(
-        [0.3] * input_dim
-    )  # random_queries[argmax_obj_vals[0], argmax_obj_vals[1], :]
-    random_queries = random_queries[:, [argmax_obj_vals[1] - 1], :]
-    queries = torch.cat([best_point.expand_as(random_queries), random_queries], dim=1)
+    queries = torch.cat([baseline_point.expand_as(queries), queries], dim=1)
     return queries
 
 
@@ -195,13 +178,14 @@ def get_obj_vals(queries, obj_func):
 
 
 def generate_responses(obj_vals, noise_type, noise_level):
-    # generate simulated comparisons based on true underlying objective
+    # Generate simulated comparisons based on true underlying objective
     corrupted_obj_vals = corrupt_obj_vals(obj_vals, noise_type, noise_level)
     responses = torch.argmax(corrupted_obj_vals, dim=-1)
     return responses
 
 
 def corrupt_obj_vals(obj_vals, noise_type, noise_level):
+    # Noise in the decision-maker's responses is simulated by corrupting the objective values
     if noise_type == "noiseless":
         corrupted_obj_vals = obj_vals
     elif noise_type == "probit":
@@ -225,16 +209,16 @@ def corrupt_obj_vals(obj_vals, noise_type, noise_level):
 
 def training_data_for_pairwise_gp(queries, responses):
     num_queries = queries.shape[0]
-    batch_size = queries.shape[1]
+    num_alternatives = queries.shape[1]
     datapoints = []
     comparisons = []
     for i in range(num_queries):
-        best_item_id = batch_size * i + responses[i]
+        best_item_id = num_alternatives * i + responses[i]
         comparison = [best_item_id]
-        for j in range(batch_size):
+        for j in range(num_alternatives):
             datapoints.append(queries[i, j, :].unsqueeze(0))
             if j != responses[i]:
-                comparison.append(batch_size * i + j)
+                comparison.append(num_alternatives * i + j)
         comparisons.append(torch.tensor(comparison).unsqueeze(0))
 
     datapoints = torch.cat(datapoints, dim=0)
@@ -252,7 +236,7 @@ def optimize_acqf_and_get_suggested_query(
     batch_limit: Optional[int] = 2,
     init_batch_limit: Optional[int] = 30,
 ) -> Tensor:
-    """Optimizes the acquisition function, and returns the candidate solution."""
+    """Optimizes the acquisition function and returns the (approximate) optimum."""
 
     candidates, acq_values = optimize_acqf(
         acq_function=acq_func,

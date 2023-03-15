@@ -31,15 +31,15 @@ from src.utils import (
     optimize_acqf_and_get_suggested_query,
 )
 
-
+# See experiment_manager.py for parameters
 def pbo_trial(
     problem: str,
     obj_func: Callable,
     input_dim: int,
-    comp_noise_type: str,
-    comp_noise: float,
+    noise_type: str,
+    noise_level: float,
     algo: str,
-    batch_size: int,
+    num_alternatives: int,
     num_init_queries: int,
     num_algo_queries: int,
     trial: int,
@@ -50,7 +50,7 @@ def pbo_trial(
     algo_params: Optional[Dict] = None,
 ) -> None:
 
-    algo_id = algo + "_" + str(batch_size)
+    algo_id = algo + "_" + str(num_alternatives)  # Append q to algo ID
 
     # Get script directory
     script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
@@ -67,7 +67,9 @@ def pbo_trial(
                 results_folder + "queries/queries_" + str(trial) + ".txt"
             )
             queries = queries.reshape(
-                queries.shape[0], batch_size, int(queries.shape[1] / batch_size)
+                queries.shape[0],
+                num_alternatives,
+                int(queries.shape[1] / num_alternatives),
             )
             queries = torch.tensor(queries)
             obj_vals = torch.tensor(
@@ -78,7 +80,7 @@ def pbo_trial(
                     results_folder + "responses/responses_" + str(trial) + ".txt"
                 )
             )
-            # Historical max objective within queries
+            # Historical maximum objective values within queries
             max_obj_vals_within_queries = list(
                 np.loadtxt(
                     results_folder
@@ -108,7 +110,7 @@ def pbo_trial(
                 queries,
                 responses,
                 model_type=model_type,
-                likelihood=comp_noise_type,
+                likelihood=noise_type,
             )
             t1 = time.time()
             model_training_time = t1 - t0
@@ -120,11 +122,11 @@ def pbo_trial(
             # Initial data
             queries, obj_vals, responses = generate_initial_data(
                 num_queries=num_init_queries,
-                batch_size=batch_size,
+                num_alternatives=num_alternatives,
                 input_dim=input_dim,
                 obj_func=obj_func,
-                comp_noise_type=comp_noise_type,
-                comp_noise=comp_noise,
+                noise_type=noise_type,
+                noise_level=noise_level,
                 add_baseline_point=add_baseline_point,
                 seed=trial,
             )
@@ -135,7 +137,7 @@ def pbo_trial(
                 queries,
                 responses,
                 model_type=model_type,
-                likelihood=comp_noise_type,
+                likelihood=noise_type,
             )
             t1 = time.time()
             model_training_time = t1 - t0
@@ -146,7 +148,7 @@ def pbo_trial(
             )
             obj_vals_at_max_post_mean = [obj_val_at_max_post_mean]
 
-            # Historical max objective values within queries and runtimes
+            # Historical maximum objective values within queries and runtimes
             max_obj_val_within_queries = obj_vals.max().item()
             max_obj_vals_within_queries = [max_obj_val_within_queries]
 
@@ -158,11 +160,11 @@ def pbo_trial(
         # Initial data
         queries, obj_vals, responses = generate_initial_data(
             num_queries=num_init_queries,
-            batch_size=batch_size,
+            num_alternatives=num_alternatives,
             input_dim=input_dim,
             obj_func=obj_func,
-            comp_noise_type=comp_noise_type,
-            comp_noise=comp_noise,
+            noise_type=noise_type,
+            noise_level=noise_level,
             add_baseline_point=add_baseline_point,
             seed=trial,
         )
@@ -173,7 +175,7 @@ def pbo_trial(
             queries,
             responses,
             model_type=model_type,
-            likelihood=comp_noise_type,
+            likelihood=noise_type,
         )
         t1 = time.time()
         model_training_time = t1 - t0
@@ -184,7 +186,7 @@ def pbo_trial(
         )
         obj_vals_at_max_post_mean = [obj_val_at_max_post_mean]
 
-        # Historical max objective values within queries and runtimes
+        # Historical maximum objective values within queries and runtimes
         max_obj_val_within_queries = obj_vals.max().item()
         max_obj_vals_within_queries = [max_obj_val_within_queries]
 
@@ -205,10 +207,10 @@ def pbo_trial(
         new_query = get_new_suggested_query(
             algo=algo,
             model=model,
-            batch_size=batch_size,
+            num_alternatives=num_alternatives,
             input_dim=input_dim,
             algo_params=algo_params,
-            comp_noise=comp_noise,
+            noise_level=noise_level,
             model_type=model_type,
         )
         t1 = time.time()
@@ -218,7 +220,7 @@ def pbo_trial(
         # Get response at new query
         new_obj_vals = get_obj_vals(new_query, obj_func)
         new_response = generate_responses(
-            new_obj_vals, noise_type=comp_noise_type, noise_level=comp_noise
+            new_obj_vals, noise_type=noise_type, noise_level=noise_level
         )
 
         # Update training data
@@ -232,10 +234,8 @@ def pbo_trial(
             queries,
             responses,
             model_type=model_type,
-            likelihood=comp_noise_type,
+            likelihood=noise_type,
         )
-        # lambd = 1.0 / model.covar_module.outputscale.item()
-        # print("Current estimate of lambda: " + str(lambd))
         t1 = time.time()
         model_training_time = t1 - t0
 
@@ -295,28 +295,31 @@ def pbo_trial(
         )
 
 
+# Computes new query to evaluate
 def get_new_suggested_query(
     algo: str,
     model: Model,
-    batch_size,
+    num_alternatives,
     input_dim: int,
-    comp_noise: float,
+    noise_level: float,
     model_type: str,
     algo_params: Optional[Dict] = None,
 ) -> Tensor:
 
-    standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
-    num_restarts = input_dim * batch_size
-    raw_samples = 30 * input_dim * batch_size
+    standard_bounds = torch.tensor(
+        [[0.0] * input_dim, [1.0] * input_dim]
+    )  # This assumes the input domain has been normalized beforehand
+    num_restarts = input_dim * num_alternatives
+    raw_samples = 30 * input_dim * num_alternatives
     batch_initial_conditions = None
 
     if algo == "random":
         return generate_random_queries(
-            num_queries=1, batch_size=batch_size, input_dim=input_dim
+            num_queries=1, num_alternatives=num_alternatives, input_dim=input_dim
         )
     elif algo == "analytic_eubo":
         acquisition_function = ExpectedUtilityOfBestOption(model=model)
-    elif algo == "eubo":
+    elif algo == "qeubo":
         sampler = SobolQMCNormalSampler(sample_shape=64)
         acquisition_function = qExpectedUtilityOfBestOption(
             model=model, sampler=sampler
@@ -327,7 +330,7 @@ def get_new_suggested_query(
             model=model,
             bounds=standard_bounds,
         )
-    elif algo == "ei":
+    elif algo == "qei":
         sampler = SobolQMCNormalSampler(sample_shape=64)
         if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
@@ -344,7 +347,7 @@ def get_new_suggested_query(
             best_f=mean.max().item(),
             sampler=sampler,
         )
-    elif algo == "nei":
+    elif algo == "qnei":
         sampler = SobolQMCNormalSampler(sample_shape=64)
         if model_type == "pairwise_gp":
             X_baseline = model.datapoints.clone()
@@ -361,16 +364,16 @@ def get_new_suggested_query(
             sampler=sampler,
             prune_baseline=True,
         )
-    elif algo == "ts":
+    elif algo == "qts":
         standard_bounds = torch.tensor([[0.0] * input_dim, [1.0] * input_dim])
         return gen_thompson_sampling_query(
-            model, batch_size, standard_bounds, input_dim, 30 * input_dim
+            model, num_alternatives, standard_bounds, input_dim, 30 * input_dim
         )
 
     new_query = optimize_acqf_and_get_suggested_query(
         acq_func=acquisition_function,
         bounds=standard_bounds,
-        batch_size=batch_size,
+        batch_size=num_alternatives,
         num_restarts=num_restarts,
         raw_samples=raw_samples,
         batch_initial_conditions=batch_initial_conditions,
@@ -380,6 +383,7 @@ def get_new_suggested_query(
     return new_query
 
 
+# Computes the (true) objective value at the maximizer of the model's posterior mean function
 def compute_obj_val_at_max_post_mean(
     obj_func: Callable,
     model: Model,

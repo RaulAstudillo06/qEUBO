@@ -15,13 +15,13 @@ from torch import Tensor
 
 
 class ExpectedUtilityOfBestOption(AcquisitionFunction):
-    r""""""
+    r"""Analytic Expected Utility of Best Option (EUBO)"""
 
     def __init__(
         self,
         model: Model,
     ) -> None:
-        r"""Analytic Expected Utility of the Best Option (EUBO).
+        r"""Analytic Expected Utility of Best Option (EUBO).
 
         Only supports the case of `q=1`. The model must be
         single-outcome.
@@ -43,7 +43,8 @@ class ExpectedUtilityOfBestOption(AcquisitionFunction):
         Returns:
             The acquisition value for each batch as a tensor of shape `batch_shape`.
         """
-        posterior = self.model(X)
+        posterior = self.model(X)  # Calling directly instead of posterior here to
+        # obtain the full covariance matrix
         mean = posterior.mean
         cov = posterior.covariance_matrix
         delta = mean[..., 0] - mean[..., 1]
@@ -60,14 +61,22 @@ class ExpectedUtilityOfBestOption(AcquisitionFunction):
 
 
 class qExpectedUtilityOfBestOption(MCAcquisitionFunction):
-    r""" """
+    r"""Expected Utility of Best Option (qEUBO).
+
+    This computes qEUBO by
+    (1) sampling the joint posterior over q points
+    (2) evaluating the maximum objective value accross the q points for each sample
+    (3) averaging over the samples
+
+    `qEUBO(X) = E[max Y], Y ~ f(X), where X = (x_1,...,x_q)`
+    """
 
     def __init__(
         self,
         model: Model,
         sampler: Optional[MCSampler] = None,
         objective: Optional[MCAcquisitionObjective] = None,
-        X_pending: Optional[Tensor] = None,
+        X_baseline: Optional[Tensor] = None,
     ) -> None:
         r"""MC-based Expected Utility of the Best Option (qEUBO).
 
@@ -77,16 +86,18 @@ class qExpectedUtilityOfBestOption(MCAcquisitionFunction):
                 more details.
             objective: The MCAcquisitionObjective under which the samples are evaluated.
                 Defaults to `IdentityMCObjective()`.
-            X_pending:  A `m x d`-dim Tensor of `m` design points that have been
-                submitted for function evaluation but have not yet been evaluated.
-                Concatenated into X upon forward call. Copied and set to have no
-                gradient.
+            X_baseline:  A `m x d`-dim Tensor of `m` design points forced to be included
+                in the query (in addition to the q points, so the query is constituted
+                by q + m alternatives). Concatenated into X upon forward call. Copied and
+                set to have no gradient. This is useful, for example, if we want to force
+                one of the alternatives to be the point chosen by the decision-maker in
+                the previous iteration.
         """
         super().__init__(
             model=model,
             sampler=sampler,
             objective=objective,
-            X_pending=X_pending,
+            X_pending=X_baseline,
         )
 
     @concatenate_pending_points
